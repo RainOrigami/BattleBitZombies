@@ -401,7 +401,20 @@ namespace Zombies
 #pragma warning restore CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
                     {
                         RunnerPlayer player = playerKill.Victim;
-                        await Task.Delay(Random.Shared.Next(this.configuration.SuicideZombieficationMaxTime));
+                        int waitTime = Random.Shared.Next(this.configuration.SuicideZombieficationMaxTime);
+                        await Task.Delay(waitTime / 2);
+                        if (player.Team == HUMANS)
+                        {
+                            this.Server.SayToChat($"<b>{player.Name}<b> has been bitten by a <color=\"red\">zombie<color=\"white\">. Be careful around them!");
+                            player.Message("You have been bitten by a zombie! Soon you will turn into one.");
+                        }
+                        else
+                        {
+                            return;
+                        }
+
+                        await Task.Delay(waitTime / 2);
+
                         if (player.Team == HUMANS)
                         {
                             this.turnPlayer.Add(player.SteamID);
