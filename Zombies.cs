@@ -9,7 +9,14 @@ namespace Zombies
     {
         public Zombies(RunnerServer server) : base(server)
         {
-            this.configuration = JsonConvert.DeserializeObject<ZombiesConfiguration>(File.ReadAllText("ZombiesConfiguration.json")) ?? new();
+            try
+            {
+                this.configuration = JsonConvert.DeserializeObject<ZombiesConfiguration>(File.ReadAllText("ZombiesConfiguration.json")) ?? new();
+            }
+            catch
+            {
+                this.configuration = new();
+            }
         }
 
         private const Team HUMANS = Team.TeamA;
