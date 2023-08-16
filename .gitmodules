@@ -1,0 +1,8 @@
+[submodule "BattleBitCommands"]
+	path = BattleBitCommands
+	url = https://github.com/RainOrigami/BattleBitCommands.git
+	branch = main
+[submodule "BattleBitDiscordWebhooks"]
+	path = BattleBitDiscordWebhooks
+	url = https://github.com/RainOrigami/BattleBitDiscordWebhooks.git
+	branch = main

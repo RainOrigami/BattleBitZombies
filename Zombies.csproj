@@ -7,8 +7,22 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="BBRAPIModules" Version="0.0.2" />
+    <Compile Remove="BattleBitCommands\**" />
+    <Compile Remove="BattleBitDiscordWebhooks\**" />
+    <EmbeddedResource Remove="BattleBitCommands\**" />
+    <EmbeddedResource Remove="BattleBitDiscordWebhooks\**" />
+    <None Remove="BattleBitCommands\**" />
+    <None Remove="BattleBitDiscordWebhooks\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="BBRAPIModules" Version="0.0.3" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="BattleBitCommands\Commands.csproj" />
+    <ProjectReference Include="BattleBitDiscordWebhooks\BattleBitDiscordWebhooks.csproj" />
   </ItemGroup>
 
 </Project>

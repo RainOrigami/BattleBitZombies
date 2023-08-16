@@ -1,10 +1,14 @@
 ﻿using BattleBitAPI;
 using BattleBitAPI.Common;
+using BattleBitDiscordWebhooks;
 using BBRAPIModules;
+using Commands;
 using Newtonsoft.Json;
+using System.Text;
 
 namespace Zombies
 {
+    [RequireModule(typeof(CommandHandler))]
     public class Zombies : BattleBitModule
     {
         public Zombies(RunnerServer server) : base(server)
@@ -21,8 +25,6 @@ namespace Zombies
 
         private const Team HUMANS = Team.TeamA;
         private const Team ZOMBIES = Team.TeamB;
-        private const int WAVE_TIME = 30;
-        private const int WAVE_WATCHDOG_TIMER = 1000;
 
         private static readonly string[] HUMAN_UNIFORM = new[] { "USA_NU_Uniform_Uni_02", "USA_NU_Uniform_Uni_03_Patreon", "RUS_NU_Uniform_Uni_02", "RUS_NU_Uniform_Uni_02_Patreon" };
         private static readonly string[] HUMAN_HELMET = new[] { "USV2_Universal_DON_Helmet_00_A_Z", "RUV2_Universal_DON_Helmet_00_A_Z", "USV2_Universal_All_Helmet_01_A_Z", "RUV2_Universal_All_Helmet_01_A_Z", "USV2_Universal_DON_Helmet_01_A_Z", "RUV2_Universal_DON_Helmet_01_A_Z", "RUV2_Universal_All_Helmet_00_A_Z", "RUV2_Universal_All_Helmet_00_A_Z", "USV2_Assault_All_Helmet_00_D_N", "RUV2_Assault_All_Helmet_00_D_N", "USV2_Medic_All_Helmet_00_A_Z", "RUV2_Medic_All_Helmet_00_A_Z", "USV2_Medic_All_Helmet_01_A_Z", "RUV2_Medic_All_Helmet_01_A_Z", "USV2_Engineer_All_Helmet_00_A_Z", "RUV2_Engineer_All_Helmet_00_A_Z", "RUV2_Engineer_All_Helmet_00_B_Z", "USV2_Engineer_VIP_Helmet_00_A_Z", "RUV2_Engineer_VIP_Helmet_00_A_Z", "USV2_Engineer_DON_Helmet_00_A_Z", "RUV2_Engineer_DON_Helmet_00_A_Z", "USV2_Engineer_All_Helmet_01_C_N", "RUV2_Engineer_All_Helmet_01_C_N", "USV2_Sniper_All_Helmet_00_A_Z", "RUV2_Sniper_All_Helmet_00_A_Z", "USV2_Sniper_All_Helmet_01_A_Z", "RUV2_Sniper_All_Helmet_01_A_Z", "USV2_Leader_All_Helmet_00_A_Z", "RUV2_Leader_All_Helmet_00_A_Z" };
@@ -36,9 +38,14 @@ namespace Zombies
         private ZombiesConfiguration configuration;
         private bool safetyEnding = false;
         private int amountOfHumansAnnounced = int.MaxValue;
-        private DateTime lastWave = DateTime.Now.Subtract(new TimeSpan(0, 0, WAVE_TIME));
-
         private List<ulong> zombies = new();
+
+        private DiscordWebhooks? discordWebhooks = null;
+
+        public override void OnModulesLoaded()
+        {
+            this.discordWebhooks = this.Server.GetModule<DiscordWebhooks>();
+        }
 
         private bool isZombie(RunnerPlayer player)
         {
@@ -70,9 +77,9 @@ namespace Zombies
 
             this.Server.RoundSettings.PlayersToStart = this.configuration.RequiredPlayersToStart;
 
-#pragma warning disable CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
+#pragma warning disable CS4014
             Task.Run(async () =>
-#pragma warning restore CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed);
+#pragma warning restore CS4014
             {
                 while (this.Server.IsConnected)
                 {
@@ -81,100 +88,23 @@ namespace Zombies
                 }
             });
 
-#if WAVE_HANDLER
-#pragma warning disable CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
-            Task.Run(waveHandler);
-#pragma warning restore CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed);
-#endif
         }
 
-
-        #region Wave handling
-#if WAVE_HANDLER
-        private async Task waveHandler()
+        [CommandCallback("list", Description = "List all players and their status")]
+        public void ListCommand(RunnerPlayer player)
         {
-            while (true)
-            {
-                await Task.Delay(WAVE_WATCHDOG_TIMER);
-                if (!this.Server.IsConnected || this.Server.RoundSettings.State != GameState.Playing)
-                {
-                    continue;
-                }
-
-                // Force wave
-                foreach (RunnerPlayer player in this.Server.AllPlayers.Where(p => !p.IsAlive))
-                {
-                    // TODO: required information to spawn a player
-                }
-            }
-
-            await Task.CompletedTask;
+            StringBuilder sb = new();
+            sb.AppendLine("<b>==ZOMBIES==</b>");
+            sb.AppendLine(string.Join(" / ", this.Server.AllPlayers.Where(p => this.isZombie(p)).Select(p => $"{p.Name} is {(p.IsAlive ? "<color=\"green\">alive" : "<color=\"red\">dead")}<color=\"white\">")));
+            sb.AppendLine("<b>==HUMANS==</b>");
+            sb.AppendLine(string.Join(" / ", this.Server.AllPlayers.Where(p => !this.isZombie(p)).Select(p => $"{p.Name} is {(p.IsAlive ? "<color=\"green\">alive" : "<color=\"red\">dead")}<color=\"white\">")));
+            player.Message(sb.ToString());
         }
-#endif
-        #endregion
 
-        public override async Task<bool> OnPlayerTypedMessage(RunnerPlayer player, ChatChannel channel, string msg)
+        [CommandCallback("zombie", Description = "Check whether you're a zombie or not")]
+        public void ZombieCommand(RunnerPlayer player)
         {
-            bool result = await base.OnPlayerTypedMessage(player, channel, msg);
-
-            if (!result)
-            {
-                return result;
-            }
-
-            if (msg == "!zombie")
-            {
-                Task.Run(async () =>
-                {
-                    await Task.Delay(50);
-                    this.Server.SayToChat($"{player.Name} is {(this.isZombie(player) ? "a" : "not a")} zombie");
-                });
-                //player.Message($"You are {(player.IsZombie ? "a " : "not a")} zombie");
-            }
-
-            if (msg == "!switch")
-            {
-                //if (player.IsZombie)
-                //{
-                //    await Task.Delay(50);
-                //    this.SayToChat("You can not switch to the zombie side. THIS IS A DEBUG COMMAND USE WITH CAUTION AND EXPECT BUGS");
-                //}
-                this.setZombie(player, !this.isZombie(player));
-                await forcePlayerToCorrectTeam(player);
-                return false;
-            }
-
-            //if (msg == "!test")
-            //{
-            //    this.SayToChat("<b>test</b>");
-            //    this.AnnounceLong("<b>test<b>");
-            //    foreach (var item in this.AllPlayers)
-            //    {
-            //        item.Message("<b>test</b>");
-            //    }
-            //}
-
-            //if (msg == "!checkend")
-            //{
-            //    await checkGameEnd(null);
-            //}
-
-            if (msg == "!list")
-            {
-                await Task.Delay(50);
-                this.Server.SayToChat("<b>==ZOMBIES==");
-                this.Server.SayToChat(string.Join(" / ", this.Server.AllPlayers.Where(p => this.isZombie(p)).Select(p => $"{p.Name} is {(p.IsAlive ? "<color=\"green\">alive" : "<color=\"red\">dead")}<color=\"white\">")));
-                this.Server.SayToChat("<b>==HUMANS==");
-                this.Server.SayToChat(string.Join(" / ", this.Server.AllPlayers.Where(p => !this.isZombie(p)).Select(p => $"{p.Name} is {(p.IsAlive ? "<color=\"green\">alive" : "<color=\"red\">dead")}<color=\"white\">")));
-                return false;
-            }
-
-            if (msg == "!fix")
-            {
-                this.Server.RoundSettings.PlayersToStart = this.configuration.RequiredPlayersToStart;
-            }
-
-            return true;
+            this.Server.SayToChat($"{player.Name} is {(this.isZombie(player) ? "a" : $"not {(this.turnPlayer.Contains(player.SteamID) ? "yet " : "")}a")} zombie");
         }
 
         public override async Task OnGameStateChanged(GameState oldState, GameState newState)
@@ -403,17 +333,18 @@ namespace Zombies
                 }
                 else
                 {
-#pragma warning disable CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
+#pragma warning disable CS4014
                     Task.Run(async () =>
-#pragma warning restore CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
+#pragma warning restore CS4014
                     {
                         RunnerPlayer player = playerKill.Victim;
+                        this.turnPlayer.Add(player.SteamID);
                         int waitTime = Random.Shared.Next(this.configuration.SuicideZombieficationMaxTime);
                         await Task.Delay(waitTime / 2);
                         if (player.Team == HUMANS)
                         {
                             this.Server.SayToChat($"<b>{player.Name}<b> has been bitten by a <color=\"red\">zombie<color=\"white\">. Be careful around them!");
-                            player.Message("You have been bitten by a zombie! Soon you will turn into one.");
+                            player.Message("You have been bitten by a zombie! Any time now you will turn into one.");
                         }
                         else
                         {
@@ -424,22 +355,20 @@ namespace Zombies
 
                         if (player.Team == HUMANS)
                         {
-                            this.turnPlayer.Add(player.SteamID);
                             this.setZombie(player, true);
                             player.ChangeTeam(ZOMBIES);
                             player.Message("You have been infected and are now a zombie!");
                             this.Server.SayToChat($"<b>{player.Name}<b> is now a <color=\"red\">zombie<color=\"white\">!");
+
+                            this.discordWebhooks?.SendMessage($"Player {playerKill.Victim.Name} died and has become a zombie.");
+
                             await this.checkGameEnd();
                         }
                     });
                 }
             }
 
-            //if (this.discordWebhooks != null)
-            //{
-            //    this.discordWebhooks.SendMessage($"Player {playerKill.Victim.Name} died and has become a zombie.");
-            //}
-            // TODO: discord webhooks
+            this.discordWebhooks?.SendMessage($"Player {playerKill.Victim.Name} died and has become a zombie.");
 
             // Zombie killed human, turn human into zombie
             this.turnPlayer.Add(playerKill.Victim.SteamID);
@@ -480,11 +409,7 @@ namespace Zombies
             {
                 safetyEnding = true;
                 this.Server.AnnounceLong("ZOMBIES WIN!");
-                //if (this.discordWebhooks != null)
-                //{
-                //    this.discordWebhooks.SendMessage("== ZOMBIES WIN ==");
-                //}
-                // TODO: discord
+                this.discordWebhooks?.SendMessage("== ZOMBIES WIN ==");
                 await Task.Delay(2000);
                 this.Server.ForceEndGame();
                 return;
