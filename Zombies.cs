@@ -1,10 +1,13 @@
-﻿using BattleBitAPI;
-using BattleBitAPI.Common;
-using BattleBitDiscordWebhooks;
+﻿using BattleBitAPI.Common;
 using BBRAPIModules;
 using Commands;
 using Newtonsoft.Json;
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 using System.Text;
+using System.Threading.Tasks;
 
 namespace Zombies
 {
@@ -39,13 +42,6 @@ namespace Zombies
         private bool safetyEnding = false;
         private int amountOfHumansAnnounced = int.MaxValue;
         private List<ulong> zombies = new();
-
-        private DiscordWebhooks? discordWebhooks = null;
-
-        public override void OnModulesLoaded()
-        {
-            this.discordWebhooks = this.Server.GetModule<DiscordWebhooks>();
-        }
 
         private bool isZombie(RunnerPlayer player)
         {
@@ -360,15 +356,11 @@ namespace Zombies
                             player.Message("You have been infected and are now a zombie!");
                             this.Server.SayToChat($"<b>{player.Name}<b> is now a <color=\"red\">zombie<color=\"white\">!");
 
-                            this.discordWebhooks?.SendMessage($"Player {playerKill.Victim.Name} died and has become a zombie.");
-
                             await this.checkGameEnd();
                         }
                     });
                 }
             }
-
-            this.discordWebhooks?.SendMessage($"Player {playerKill.Victim.Name} died and has become a zombie.");
 
             // Zombie killed human, turn human into zombie
             this.turnPlayer.Add(playerKill.Victim.SteamID);
@@ -409,7 +401,6 @@ namespace Zombies
             {
                 safetyEnding = true;
                 this.Server.AnnounceLong("ZOMBIES WIN!");
-                this.discordWebhooks?.SendMessage("== ZOMBIES WIN ==");
                 await Task.Delay(2000);
                 this.Server.ForceEndGame();
                 return;
@@ -444,5 +435,16 @@ namespace Zombies
         }
         #endregion
 
+    }
+
+    public class ZombiesConfiguration
+    {
+        public int InitialZombieCount { get; set; } = 6;
+        public int AnnounceLastHumansCount { get; set; } = 10;
+        public int RequiredPlayersToStart { get; set; } = 20;
+        public float ZombieMinDamageReceived { get; set; } = 0.2f;
+        public float ZombieMaxDamageReceived { get; set; } = 2f;
+        public float SuicideZombieficationChance { get; set; } = 0.3141f;
+        public int SuicideZombieficationMaxTime { get; set; } = 120000;
     }
 }

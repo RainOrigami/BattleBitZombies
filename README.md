@@ -1,9 +1,13 @@
 # BattleBitZombies
 28 days later inspired zombies pvp game mode module for battle bit modular api
 
-Clone into modules directory of your https://github.com/RainOrigami/BattleBitAPIRunner instance.
+## Dependencies
+- [CommandHandler](https://github.com/RainOrigami/BattleBitBaseModules/blob/main/CommandHandler.cs)
+- [Newtonsoft JSON](https://github.com/JamesNK/Newtonsoft.Json/releases) - `Bin\net6.0\Newtonsoft.Json.dll`
 
-Configuration is in the ZombiesConfiguration.json in the bin/release/publish folder (create it manually).
+## Configuration
+
+Configuration is in the ZombiesConfiguration.json (create it manually, otherwise default values are used).
 
 - InitialZombieCount: how many zombies will spawn at the start of the game
 - AnnounceLastHumansCount: how many humans left to start announcing remaining humans
