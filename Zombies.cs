@@ -311,6 +311,9 @@ namespace Zombies
             player.Modifications.JumpHeightMultiplier = 1f;
             player.Modifications.ReceiveDamageMultiplier = 1f;
             player.Modifications.GiveDamageMultiplier = 1f;
+
+            // No night vision
+            player.Modifications.CanUseNightVision = false;
         }
         #endregion
 
