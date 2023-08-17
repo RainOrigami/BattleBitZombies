@@ -30,6 +30,9 @@ namespace Zombies
         private static readonly string[] ZOMBIE_BODY = new[] { "Zombie_01" };
         private static readonly string[] ZOMBIE_UNIFORM = new[] { "ANY_NU_Uniform_Zombie_01" };
         private static readonly string[] ZOMBIE_HELMET = new[] { "ANV2_Universal_Zombie_Helmet_00_A_Z" };
+        private static readonly string[] ZOMBIE_ARMOR = new[] { "ANV2_Universal_All_Armor_Null" };
+        private static readonly string[] ZOMBIE_BACKPACK = new[] { "ANV2_Universal_All_Backpack_Null" };
+        private static readonly string[] ZOMBIE_BELT = new[] { "ANV2_Universal_All_Belt_Null" };
 
         public ZombiesConfiguration Configuration { get; set; }
 
@@ -255,12 +258,15 @@ namespace Zombies
             request.Loadout.FirstAid = default;
             request.Loadout.FirstAidExtra = 0;
 
-            //request.Wearings.Eye = ZOMBIE_EYES[Random.Shared.Next(0, ZOMBIE_EYES.Length)];
-            //request.Wearings.Face = ZOMBIE_FACE[Random.Shared.Next(0, ZOMBIE_FACE.Length)];
-            //request.Wearings.Hair = ZOMBIE_HAIR[Random.Shared.Next(0, ZOMBIE_HAIR.Length)];
-            //request.Wearings.Skin = ZOMBIE_BODY[Random.Shared.Next(0, ZOMBIE_BODY.Length)];
-            //request.Wearings.Uniform = ZOMBIE_UNIFORM[Random.Shared.Next(0, ZOMBIE_UNIFORM.Length)];
-            //request.Wearings.Head = ZOMBIE_HELMET[Random.Shared.Next(0, ZOMBIE_HELMET.Length)];
+            request.Wearings.Eye = ZOMBIE_EYES[Random.Shared.Next(0, ZOMBIE_EYES.Length)];
+            request.Wearings.Face = ZOMBIE_FACE[Random.Shared.Next(0, ZOMBIE_FACE.Length)];
+            request.Wearings.Hair = ZOMBIE_HAIR[Random.Shared.Next(0, ZOMBIE_HAIR.Length)];
+            request.Wearings.Skin = ZOMBIE_BODY[Random.Shared.Next(0, ZOMBIE_BODY.Length)];
+            request.Wearings.Uniform = ZOMBIE_UNIFORM[Random.Shared.Next(0, ZOMBIE_UNIFORM.Length)];
+            request.Wearings.Head = ZOMBIE_HELMET[Random.Shared.Next(0, ZOMBIE_HELMET.Length)];
+            request.Wearings.Chest = ZOMBIE_ARMOR[Random.Shared.Next(0, ZOMBIE_ARMOR.Length)];
+            request.Wearings.Backbag = ZOMBIE_BACKPACK[Random.Shared.Next(0, ZOMBIE_BACKPACK.Length)];
+            request.Wearings.Belt = ZOMBIE_BELT[Random.Shared.Next(0, ZOMBIE_BELT.Length)];
 
             return Task.FromResult(request);
         }
