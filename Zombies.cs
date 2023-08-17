@@ -16,14 +16,7 @@ namespace Zombies
     {
         public Zombies(RunnerServer server) : base(server)
         {
-            try
-            {
-                this.configuration = JsonConvert.DeserializeObject<ZombiesConfiguration>(File.ReadAllText("ZombiesConfiguration.json")) ?? new();
-            }
-            catch
-            {
-                this.configuration = new();
-            }
+
         }
 
         private const Team HUMANS = Team.TeamA;
@@ -38,10 +31,19 @@ namespace Zombies
         private static readonly string[] ZOMBIE_UNIFORM = new[] { "ANY_NU_Uniform_Zombie_01" };
         private static readonly string[] ZOMBIE_HELMET = new[] { "ANV2_Universal_Zombie_Helmet_00_A_Z" };
 
-        private ZombiesConfiguration configuration;
+        public ZombiesConfiguration Configuration { get; set; }
+
+        [ModuleReference]
+        public CommandHandler CommandHandler { get; set; }
+
         private bool safetyEnding = false;
         private int amountOfHumansAnnounced = int.MaxValue;
         private List<ulong> zombies = new();
+
+        public override void OnModulesLoaded()
+        {
+            this.CommandHandler.Register(this);
+        }
 
         private bool isZombie(RunnerPlayer player)
         {
@@ -71,7 +73,7 @@ namespace Zombies
                 this.setZombie(player, player.Team == ZOMBIES);
             }
 
-            this.Server.RoundSettings.PlayersToStart = this.configuration.RequiredPlayersToStart;
+            this.Server.RoundSettings.PlayersToStart = this.Configuration.RequiredPlayersToStart;
 
 #pragma warning disable CS4014
             Task.Run(async () =>
@@ -116,7 +118,7 @@ namespace Zombies
             switch (newState)
             {
                 case GameState.WaitingForPlayers:
-                    this.Server.RoundSettings.PlayersToStart = this.configuration.RequiredPlayersToStart;
+                    this.Server.RoundSettings.PlayersToStart = this.Configuration.RequiredPlayersToStart;
                     break;
                 case GameState.CountingDown:
                     this.Server.RoundSettings.SecondsLeft = 10;
@@ -156,7 +158,7 @@ namespace Zombies
             await base.OnPlayerConnected(player);
 
             Console.WriteLine("Debug: OnPlayerConnected");
-            this.setZombie(player, this.Server.AllPlayers.Count(p => this.isZombie(p)) < this.configuration.InitialZombieCount && player.Team == ZOMBIES);
+            this.setZombie(player, this.Server.AllPlayers.Count(p => this.isZombie(p)) < this.Configuration.InitialZombieCount && player.Team == ZOMBIES);
             await this.forcePlayerToCorrectTeam(player);
             this.Server.SayToChat($"Welcome {player.Name} to the server!");
         }
@@ -278,7 +280,7 @@ namespace Zombies
                 player.SetJumpMultiplier(2.5f);
 
                 var ratio = (float)this.Server.AllPlayers.Count(p => this.isZombie(p)) / ((float)this.Server.AllPlayers.Count() - 1);
-                var multiplier = this.configuration.ZombieMinDamageReceived + (this.configuration.ZombieMaxDamageReceived - this.configuration.ZombieMinDamageReceived) * ratio;
+                var multiplier = this.Configuration.ZombieMinDamageReceived + (this.Configuration.ZombieMaxDamageReceived - this.Configuration.ZombieMinDamageReceived) * ratio;
                 player.SetReceiveDamageMultiplier(multiplier);
                 await Console.Out.WriteLineAsync($"Damage received multiplier is set to " + multiplier);
 
@@ -323,7 +325,7 @@ namespace Zombies
             if (playerKill.Killer.SteamID == playerKill.Victim.SteamID)
             {
                 // Suicides have a chance to turn humans into zombies
-                if (Random.Shared.NextDouble() > this.configuration.SuicideZombieficationChance)
+                if (Random.Shared.NextDouble() > this.Configuration.SuicideZombieficationChance)
                 {
                     return;
                 }
@@ -335,7 +337,7 @@ namespace Zombies
                     {
                         RunnerPlayer player = playerKill.Victim;
                         this.turnPlayer.Add(player.SteamID);
-                        int waitTime = Random.Shared.Next(this.configuration.SuicideZombieficationMaxTime);
+                        int waitTime = Random.Shared.Next(this.Configuration.SuicideZombieficationMaxTime);
                         await Task.Delay(waitTime / 2);
                         if (player.Team == HUMANS)
                         {
@@ -408,7 +410,7 @@ namespace Zombies
 
             if (amountOfHumansAnnounced > humanCount)
             {
-                if (humanCount <= this.configuration.AnnounceLastHumansCount)
+                if (humanCount <= this.Configuration.AnnounceLastHumansCount)
                 {
                     if (humanCount == 1)
                     {
@@ -437,7 +439,7 @@ namespace Zombies
 
     }
 
-    public class ZombiesConfiguration
+    public class ZombiesConfiguration : ModuleConfiguration
     {
         public int InitialZombieCount { get; set; } = 6;
         public int AnnounceLastHumansCount { get; set; } = 10;
