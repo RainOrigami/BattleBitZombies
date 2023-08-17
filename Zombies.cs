@@ -36,6 +36,9 @@ namespace Zombies
         [ModuleReference]
         public CommandHandler CommandHandler { get; set; }
 
+        [ModuleReference]
+        public BattleBitModule? DiscordWebhooks { get; set; }
+
         private bool safetyEnding = false;
         private int amountOfHumansAnnounced = int.MaxValue;
         private List<ulong> zombies = new();
@@ -43,6 +46,7 @@ namespace Zombies
         public override void OnModulesLoaded()
         {
             this.CommandHandler.Register(this);
+            this.DiscordWebhooks?.Call("SendMessage", "Zombies game mode loaded");
         }
 
         private bool isZombie(RunnerPlayer player)
@@ -357,13 +361,14 @@ namespace Zombies
                             player.ChangeTeam(ZOMBIES);
                             player.Message("You have been infected and are now a zombie!");
                             this.Server.SayToChat($"<b>{player.Name}<b> is now a <color=\"red\">zombie<color=\"white\">!");
-
+                            this.DiscordWebhooks?.Call("SendMessage", $"Player {playerKill.Victim.Name} died and has become a zombie.");
                             await this.checkGameEnd();
                         }
                     });
                 }
             }
 
+            this.DiscordWebhooks?.Call("SendMessage", $"Player {playerKill.Victim.Name} died and has become a zombie.");
             // Zombie killed human, turn human into zombie
             this.turnPlayer.Add(playerKill.Victim.SteamID);
 
@@ -403,6 +408,7 @@ namespace Zombies
             {
                 safetyEnding = true;
                 this.Server.AnnounceLong("ZOMBIES WIN!");
+                this.DiscordWebhooks?.Call("SendMessage", $"== ZOMBIES WIN ==");
                 await Task.Delay(2000);
                 this.Server.ForceEndGame();
                 return;

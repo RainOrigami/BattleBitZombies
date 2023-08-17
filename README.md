@@ -4,6 +4,7 @@
 ## Dependencies
 - [CommandHandler](https://github.com/RainOrigami/BattleBitBaseModules/blob/main/CommandHandler.cs)
 - [Newtonsoft JSON](https://github.com/JamesNK/Newtonsoft.Json/releases) - `Bin\net6.0\Newtonsoft.Json.dll`
+- (Optional) [DiscordWebhooks](https://github.com/RainOrigami/BattleBitBaseModules/blob/main/DiscordWebhooks.cs)
 
 ## Configuration
 
