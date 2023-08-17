@@ -279,16 +279,16 @@ namespace Zombies
             if (player.Team == ZOMBIES)
             {
                 // Zombies are faster, jump higher, have more health and one-hit
-                player.SetFallDamageMultiplier(0.0f);
-                player.SetRunningSpeedMultiplier(1.2f); // TODO: anti cheat kicks because of this
-                player.SetJumpMultiplier(2.5f);
+                player.Modifications.FallDamageMultiplier = 0.0f;
+                player.Modifications.RunningSpeedMultiplier = 1.2f; // TODO: anti cheat kicks because of this
+                player.Modifications.JumpHeightMultiplier = 2.5f;
 
                 var ratio = (float)this.Server.AllPlayers.Count(p => this.isZombie(p)) / ((float)this.Server.AllPlayers.Count() - 1);
                 var multiplier = this.Configuration.ZombieMinDamageReceived + (this.Configuration.ZombieMaxDamageReceived - this.Configuration.ZombieMinDamageReceived) * ratio;
-                player.SetReceiveDamageMultiplier(multiplier);
+                player.Modifications.ReceiveDamageMultiplier = multiplier;
                 await Console.Out.WriteLineAsync($"Damage received multiplier is set to " + multiplier);
 
-                player.SetGiveDamageMultiplier(10f); // TODO: does not count for gadgets
+                player.Modifications.GiveDamageMultiplier = 10f; // TODO: does not count for gadgets
 
                 if (!this.allowedToSpawn.Contains(player.SteamID))
                 {
@@ -300,11 +300,11 @@ namespace Zombies
             }
 
             // Humans are normal
-            player.SetFallDamageMultiplier(1f);
-            player.SetRunningSpeedMultiplier(1f);
-            player.SetJumpMultiplier(1f);
-            player.SetReceiveDamageMultiplier(1f);
-            player.SetGiveDamageMultiplier(1f);
+            player.Modifications.FallDamageMultiplier = 1f;
+            player.Modifications.RunningSpeedMultiplier = 1f;
+            player.Modifications.JumpHeightMultiplier = 1f;
+            player.Modifications.ReceiveDamageMultiplier = 1f;
+            player.Modifications.GiveDamageMultiplier = 1f;
         }
         #endregion
 
