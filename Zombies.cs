@@ -14,11 +14,6 @@ namespace Zombies
     [RequireModule(typeof(CommandHandler))]
     public class Zombies : BattleBitModule
     {
-        public Zombies(RunnerServer server) : base(server)
-        {
-
-        }
-
         private const Team HUMANS = Team.TeamA;
         private const Team ZOMBIES = Team.TeamB;
 
