@@ -1,4 +1,5 @@
-﻿using BattleBitAPI.Common;
+﻿using BattleBitAPI;
+using BattleBitAPI.Common;
 using BBRAPIModules;
 using Commands;
 using Newtonsoft.Json;
@@ -6,6 +7,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Numerics;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -149,7 +151,7 @@ namespace Zombies
 
             if (this.isZombie(player))
             {
-                player.Message("You have been infected and are now a zombie!");
+                player.Message("You have been infected and are now a zombie!", 10);
             }
 
             await Task.CompletedTask;
@@ -160,7 +162,15 @@ namespace Zombies
             await base.OnPlayerConnected(player);
 
             Console.WriteLine("Debug: OnPlayerConnected");
-            this.setZombie(player, this.Server.AllPlayers.Count(p => this.isZombie(p)) < this.Configuration.InitialZombieCount && player.Team == ZOMBIES);
+
+            if (this.Server.RoundSettings.State == GameState.Playing)
+            {
+                this.setZombie(player, true);
+            }
+            else
+            {
+                this.setZombie(player, this.Server.AllPlayers.Count(p => this.isZombie(p)) < this.Configuration.InitialZombieCount && player.Team == ZOMBIES);
+            }
             await this.forcePlayerToCorrectTeam(player);
             this.Server.SayToChat($"Welcome {player.Name} to the server!");
         }
@@ -194,8 +204,6 @@ namespace Zombies
         {
             args.Stats.Progress.Rank = 200;
             args.Stats.Progress.Prestige = 10;
-            args.Stats.Roles = Roles.Vip;
-            args.Stats.IsBanned = false;
             return Task.CompletedTask;
         }
 
@@ -219,13 +227,13 @@ namespace Zombies
                 if (request.Loadout.HeavyGadget == Gadgets.SuicideC4)
                 {
                     request.Loadout.HeavyGadget = Gadgets.C4;
-                    player.Message("Suicide C4 is not allowed and was replaced by C4.");
+                    player.Message("Suicide C4 is not allowed and was replaced by C4.", 10);
                 }
 
                 if (request.Loadout.LightGadget == Gadgets.SuicideC4)
                 {
                     request.Loadout.LightGadget = Gadgets.C4;
-                    player.Message("Suicide C4 is not allowed and was replaced by C4.");
+                    player.Message("Suicide C4 is not allowed and was replaced by C4.", 10);
                 }
 
                 // Humans can spawn as whatever they like
@@ -294,7 +302,7 @@ namespace Zombies
                 if (!this.allowedToSpawn.Contains(player.SteamID))
                 {
                     player.Kill();
-                    player.Message("<color=\"red\">You are only allowed to spawn on points.");
+                    player.Message("<color=\"red\">You are only allowed to spawn on points.", 10);
                 }
 
                 return;
@@ -350,7 +358,7 @@ namespace Zombies
                         if (player.Team == HUMANS)
                         {
                             this.Server.SayToChat($"<b>{player.Name}<b> has been bitten by a <color=\"red\">zombie<color=\"white\">. Be careful around them!");
-                            player.Message("You have been bitten by a zombie! Any time now you will turn into one.");
+                            player.Message("You have been bitten by a zombie! Any time now you will turn into one.", 10);
                         }
                         else
                         {
@@ -363,7 +371,7 @@ namespace Zombies
                         {
                             this.setZombie(player, true);
                             player.ChangeTeam(ZOMBIES);
-                            player.Message("You have been infected and are now a zombie!");
+                            player.Message("You have been infected and are now a zombie!", 10);
                             this.Server.SayToChat($"<b>{player.Name}<b> is now a <color=\"red\">zombie<color=\"white\">!");
                             this.DiscordWebhooks?.Call("SendMessage", $"Player {playerKill.Victim.Name} died and has become a zombie.");
                             await this.checkGameEnd();
@@ -447,6 +455,75 @@ namespace Zombies
         }
         #endregion
 
+        [CommandCallback("set", Description = "Set a specific balancing value.", AllowedRoles = Roles.Admin)]
+        public void SetCommand(RunnerPlayer player, BalanceVariable name, float value)
+        {
+            switch (name)
+            {
+                case BalanceVariable.InitialZombieCount:
+                    this.Configuration.InitialZombieCount = (int)value;
+                    break;
+                case BalanceVariable.AnnounceLastHumansCount:
+                    this.Configuration.AnnounceLastHumansCount = (int)value;
+                    break;
+                case BalanceVariable.RequiredPlayersToStart:
+                    this.Configuration.RequiredPlayersToStart = (int)value;
+                    break;
+                case BalanceVariable.ZombieMinDamageReceived:
+                    this.Configuration.ZombieMinDamageReceived = value;
+                    break;
+                case BalanceVariable.ZombieMaxDamageReceived:
+                    this.Configuration.ZombieMaxDamageReceived = value;
+                    break;
+                case BalanceVariable.SuicideZombieficationChance:
+                    this.Configuration.SuicideZombieficationChance = value;
+                    break;
+                case BalanceVariable.SuicideZombieficationMaxTime:
+                    this.Configuration.SuicideZombieficationMaxTime = (int)value;
+                    break;
+                case BalanceVariable.FallDamageMultiplier:
+                    this.Configuration.FallDamageMultiplier = value;
+                    break;
+                case BalanceVariable.RunningSpeedMultiplier:
+                    this.Configuration.RunningSpeedMultiplier = value;
+                    break;
+                case BalanceVariable.JumpHeightMultiplier:
+                    this.Configuration.JumpHeightMultiplier = value;
+                    break;
+                default:
+                    break;
+            }
+
+            this.Configuration.Save();
+        }
+
+        [CommandCallback("switch", Description = "Switch a player to the other team.", AllowedRoles = Roles.Admin)]
+        public async void SwitchCommand(RunnerPlayer source, RunnerPlayer target)
+        {
+            target.Kill();
+            this.setZombie(target, !this.isZombie(target));
+            await this.forcePlayerToCorrectTeam(target);
+            if (this.isZombie(target))
+            {
+                this.Server.SayToChat($"<b>{target.Name}<b> is now a <color=\"red\">zombie<color=\"white\">!");
+            }
+
+            await checkGameEnd();
+        }
+    }
+
+    public enum BalanceVariable
+    {
+        InitialZombieCount,
+        AnnounceLastHumansCount,
+        RequiredPlayersToStart,
+        ZombieMinDamageReceived,
+        ZombieMaxDamageReceived,
+        SuicideZombieficationChance,
+        SuicideZombieficationMaxTime,
+        FallDamageMultiplier,
+        RunningSpeedMultiplier,
+        JumpHeightMultiplier
     }
 
     public class ZombiesConfiguration : ModuleConfiguration
@@ -458,5 +535,8 @@ namespace Zombies
         public float ZombieMaxDamageReceived { get; set; } = 2f;
         public float SuicideZombieficationChance { get; set; } = 0.3141f;
         public int SuicideZombieficationMaxTime { get; set; } = 120000;
+        public float FallDamageMultiplier { get; set; } = 1f;
+        public float RunningSpeedMultiplier { get; set; } = 1f;
+        public float JumpHeightMultiplier { get; set; } = 1f;
     }
 }
