@@ -2,7 +2,6 @@
 using BattleBitAPI.Common;
 using BBRAPIModules;
 using Commands;
-using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -362,7 +361,7 @@ namespace Zombies
                             player.ChangeTeam(ZOMBIES);
                             player.Message("You have been infected and are now a zombie!", 10);
                             this.Server.SayToChat($"<b>{player.Name}<b> is now a <color=\"red\">zombie<color=\"white\">!");
-                            this.DiscordWebhooks?.Call("SendMessage", $"Player {playerKill.Victim.Name} died and has become a zombie.");
+                            this.DiscordWebhooks?.Call("SendMessage", $"Player {playerKill.Victim.Name} succumbed to the bite and has become a zombie.");
                             await this.checkGameEnd();
                         }
                     });
