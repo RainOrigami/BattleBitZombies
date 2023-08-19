@@ -112,7 +112,6 @@ namespace Zombies
         public override async Task OnGameStateChanged(GameState oldState, GameState newState)
         {
             await base.OnGameStateChanged(oldState, newState);
-            Console.WriteLine($"Changed state to {newState}");
 
             if (oldState == newState)
             {
@@ -161,8 +160,6 @@ namespace Zombies
         {
             await base.OnPlayerConnected(player);
 
-            Console.WriteLine("Debug: OnPlayerConnected");
-
             if (this.Server.RoundSettings.State == GameState.Playing)
             {
                 this.setZombie(player, true);
@@ -179,8 +176,6 @@ namespace Zombies
         {
             await base.OnPlayerDisconnected(player);
 
-            Console.WriteLine("Debug: OnPlayerDisconnected");
-
             if (!this.Server.AllPlayers.Any(p => this.isZombie(p)) && this.Server.AllPlayers.Any())
             {
                 RunnerPlayer newZombie = this.Server.AllPlayers.Skip(Random.Shared.Next(0, this.Server.AllPlayers.Count())).First();
@@ -194,7 +189,6 @@ namespace Zombies
         {
             await base.OnPlayerChangeTeam(player, team);
 
-            Console.WriteLine("Debug: OnPlayerChangeTeam");
             await this.forcePlayerToCorrectTeam(player);
         }
         #endregion
@@ -211,8 +205,6 @@ namespace Zombies
 
         public override Task<OnPlayerSpawnArguments> OnPlayerSpawning(RunnerPlayer player, OnPlayerSpawnArguments request)
         {
-            Console.WriteLine("Debug: OnPlayerSpawning, coordinates " + request.SpawnPosition.ToString());
-
             this.allowedToSpawn.Add(player.SteamID);
 
             if (player.Team == HUMANS)
@@ -278,7 +270,6 @@ namespace Zombies
         {
             await base.OnPlayerSpawned(player);
 
-            Console.WriteLine("Debug: OnPlayerSpawned");
             if (player.Team != (this.isZombie(player) ? ZOMBIES : HUMANS))
             {
                 player.Kill();
@@ -295,7 +286,7 @@ namespace Zombies
                 var ratio = (float)this.Server.AllPlayers.Count(p => this.isZombie(p)) / ((float)this.Server.AllPlayers.Count() - 1);
                 var multiplier = this.Configuration.ZombieMinDamageReceived + (this.Configuration.ZombieMaxDamageReceived - this.Configuration.ZombieMinDamageReceived) * ratio;
                 player.Modifications.ReceiveDamageMultiplier = multiplier;
-                await Console.Out.WriteLineAsync($"Damage received multiplier is set to " + multiplier);
+                await Console.Out.WriteLineAsync($"Damage received multiplier of {player.Name} is set to " + multiplier);
 
                 player.Modifications.GiveDamageMultiplier = 10f; // TODO: does not count for gadgets
 
@@ -324,8 +315,6 @@ namespace Zombies
         List<ulong> turnPlayer = new();
         public override async Task OnAPlayerDownedAnotherPlayer(OnPlayerKillArguments<RunnerPlayer> playerKill)
         {
-            Console.WriteLine("Debug: OnAPlayerDownedAnotherPlayer");
-
             if (playerKill.Victim.Team == ZOMBIES)
             {
                 // Zombies will just respawn
@@ -404,17 +393,12 @@ namespace Zombies
 
         private async Task checkGameEnd()
         {
-            Console.WriteLine("Debug: checkGameEnd");
-
             if ((this.Server.RoundSettings.State != GameState.Playing) || safetyEnding)
             {
-                Console.WriteLine($"Not ending because {this.Server.RoundSettings.State} / {safetyEnding}");
                 return;
             }
 
             int humanCount = this.Server.AllPlayers.Count(player => !this.isZombie(player));
-
-            await Console.Out.WriteLineAsync($"Human count is {humanCount}");
 
             if (humanCount == 0)
             {
