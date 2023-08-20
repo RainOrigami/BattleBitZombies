@@ -91,7 +91,7 @@ namespace Zombies
         [CommandCallback("zombie", Description = "Check whether you're a zombie or not")]
         public void ZombieCommand(RunnerPlayer player)
         {
-            this.Server.SayToChat($"{player.Name} is {(this.getPlayer(player).IsZombie ? "a" : $"not {(this.turnPlayer.Contains(player.SteamID) ? "yet " : "")}a")} zombie");
+            this.Server.SayToAllChat($"{player.Name} is {(this.getPlayer(player).IsZombie ? "a" : $"not {(this.turnPlayer.Contains(player.SteamID) ? "yet " : "")}a")} zombie");
         }
 
         public override Task OnGameStateChanged(GameState oldState, GameState newState)
@@ -155,7 +155,7 @@ namespace Zombies
                 this.getPlayer(player).IsZombie = this.Server.AllPlayers.Count(p => this.getPlayer(p).IsZombie) < this.Configuration.InitialZombieCount && player.Team == ZOMBIES;
             }
             this.forcePlayerToCorrectTeam(player);
-            this.Server.SayToChat($"Welcome {player.Name} to the server!");
+            this.Server.SayToAllChat($"Welcome {player.Name} to the server!");
 
             return Task.CompletedTask;
         }
@@ -324,7 +324,7 @@ namespace Zombies
                         await Task.Delay(waitTime / 2);
                         if (player.Team == HUMANS)
                         {
-                            this.Server.SayToChat($"<b>{player.Name}<b> has been bitten by a <color=\"red\">zombie<color=\"white\">. Be careful around them!");
+                            this.Server.SayToAllChat($"<b>{player.Name}<b> has been bitten by a <color=\"red\">zombie<color=\"white\">. Be careful around them!");
                             player.Message("You have been bitten by a zombie! Any time now you will turn into one.", 10);
                         }
                         else
@@ -339,7 +339,7 @@ namespace Zombies
                             this.getPlayer(player).IsZombie = true;
                             player.ChangeTeam(ZOMBIES);
                             player.Message("You have been infected and are now a zombie!", 10);
-                            this.Server.SayToChat($"<b>{player.Name}<b> is now a <color=\"red\">zombie<color=\"white\">!");
+                            this.Server.SayToAllChat($"<b>{player.Name}<b> is now a <color=\"red\">zombie<color=\"white\">!");
                             this.DiscordWebhooks?.Call("SendMessage", $"Player {playerKill.Victim.Name} succumbed to the bite and has become a zombie.");
                             await this.checkGameEnd();
                         }
@@ -364,7 +364,7 @@ namespace Zombies
             this.turnPlayer.Remove(player.SteamID);
             this.getPlayer(player).IsZombie = true;
             this.forcePlayerToCorrectTeam(player);
-            this.Server.SayToChat($"<b>{player.Name}<b> is now a <color=\"red\">zombie<color=\"white\">!");
+            this.Server.SayToAllChat($"<b>{player.Name}<b> is now a <color=\"red\">zombie<color=\"white\">!");
 
             await checkGameEnd();
         }
@@ -398,17 +398,17 @@ namespace Zombies
                         if (lastHuman != null)
                         {
                             this.Server.AnnounceShort($"<b>{lastHuman.Name}<b> is the LAST HUMAN, <color=\"red\">KILL IT!");
-                            this.Server.SayToChat($"<b>{lastHuman.Name}<b> is the LAST HUMAN, <color=\"red\">KILL IT!");
+                            this.Server.SayToAllChat($"<b>{lastHuman.Name}<b> is the LAST HUMAN, <color=\"red\">KILL IT!");
                         }
                         else
                         {
                             this.Server.AnnounceShort($"LAST HUMAN, <color=\"red\">KILL IT!");
-                            this.Server.SayToChat($"LAST HUMAN, <color=\"red\">KILL IT!");
+                            this.Server.SayToAllChat($"LAST HUMAN, <color=\"red\">KILL IT!");
                         }
                     }
                     else
                     {
-                        this.Server.SayToChat($"{humanCount} HUMANS LEFT, <color=\"red\">KILL THEM!");
+                        this.Server.SayToAllChat($"{humanCount} HUMANS LEFT, <color=\"red\">KILL THEM!");
                     }
                 }
             }
@@ -467,7 +467,7 @@ namespace Zombies
             this.forcePlayerToCorrectTeam(target);
             if (this.getPlayer(target).IsZombie)
             {
-                this.Server.SayToChat($"<b>{target.Name}<b> is now a <color=\"red\">zombie<color=\"white\">!");
+                this.Server.SayToAllChat($"<b>{target.Name}<b> is now a <color=\"red\">zombie<color=\"white\">!");
             }
 
             await checkGameEnd();
