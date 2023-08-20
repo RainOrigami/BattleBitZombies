@@ -59,6 +59,10 @@ namespace Zombies
 
             foreach (RunnerPlayer player in this.Server.AllPlayers)
             {
+                if (!this.players.ContainsKey(player.SteamID))
+                {
+                    this.players.Add(player.SteamID, new ZombiesPlayer(player));
+                }
                 this.getPlayer(player).IsZombie = player.Team == ZOMBIES;
             }
 
