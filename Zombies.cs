@@ -95,7 +95,7 @@ namespace Zombies
         [CommandCallback("zombie", Description = "Check whether you're a zombie or not")]
         public void ZombieCommand(RunnerPlayer player)
         {
-            this.Server.SayToAllChat($"{player.Name} is {(this.getPlayer(player).IsZombie ? "a" : $"not {(this.turnPlayer.Contains(player.SteamID) ? "yet " : "")}a")} zombie");
+            this.Server.SayToAllChat($"{player.Name} is {(this.getPlayer(player).IsZombie ? "a" : $"not {(this.getPlayer(player).Turn ? "yet " : "")}a")} zombie");
         }
 
         public override Task OnGameStateChanged(GameState oldState, GameState newState)
@@ -267,16 +267,14 @@ namespace Zombies
             if (player.Team == ZOMBIES)
             {
                 // Zombies are faster, jump higher, have more health and one-hit
-                player.Modifications.FallDamageMultiplier = 0.0f;
-                player.Modifications.RunningSpeedMultiplier = 1.2f; // TODO: anti cheat kicks because of this
-                player.Modifications.JumpHeightMultiplier = 2.5f;
+                player.Modifications.FallDamageMultiplier = this.Configuration.FallDamageMultiplier;
+                player.Modifications.RunningSpeedMultiplier = this.Configuration.RunningSpeedMultiplier;
+                player.Modifications.JumpHeightMultiplier = this.Configuration.JumpHeightMultiplier;
 
                 var ratio = (float)this.Server.AllPlayers.Count(p => this.getPlayer(p).IsZombie) / ((float)this.Server.AllPlayers.Count() - 1);
                 var multiplier = this.Configuration.ZombieMinDamageReceived + (this.Configuration.ZombieMaxDamageReceived - this.Configuration.ZombieMinDamageReceived) * ratio;
                 player.Modifications.ReceiveDamageMultiplier = multiplier;
                 await Console.Out.WriteLineAsync($"Damage received multiplier of {player.Name} is set to " + multiplier);
-
-                player.Modifications.GiveDamageMultiplier = 10f; // TODO: does not count for gadgets
 
                 return;
             }
@@ -286,7 +284,6 @@ namespace Zombies
             player.Modifications.RunningSpeedMultiplier = 1f;
             player.Modifications.JumpHeightMultiplier = 1f;
             player.Modifications.ReceiveDamageMultiplier = 1f;
-            player.Modifications.GiveDamageMultiplier = 1f;
 
             // No night vision
             player.Modifications.CanUseNightVision = false;
@@ -294,7 +291,6 @@ namespace Zombies
         #endregion
 
         #region Zombie game logic
-        List<ulong> turnPlayer = new();
         public override async Task OnAPlayerDownedAnotherPlayer(OnPlayerKillArguments<RunnerPlayer> playerKill)
         {
             if (playerKill.Victim.Team == ZOMBIES)
@@ -323,7 +319,7 @@ namespace Zombies
 #pragma warning restore CS4014
                     {
                         RunnerPlayer player = playerKill.Victim;
-                        this.turnPlayer.Add(player.SteamID);
+                        this.getPlayer(player).Turn = true;
                         int waitTime = Random.Shared.Next(this.Configuration.SuicideZombieficationMaxTime);
                         await Task.Delay(waitTime / 2);
                         if (player.Team == HUMANS)
@@ -351,26 +347,38 @@ namespace Zombies
                 }
             }
 
-            this.DiscordWebhooks?.Call("SendMessage", $"Player {playerKill.Victim.Name} died and has become a zombie.");
             // Zombie killed human, turn human into zombie
-            this.turnPlayer.Add(playerKill.Victim.SteamID);
+            this.getPlayer(playerKill.Victim).Turn = true;
+            await this.checkGameEnd();
 
             await Task.CompletedTask;
         }
 
         public override async Task OnPlayerDied(RunnerPlayer player)
         {
-            if (!this.turnPlayer.Contains(player.SteamID))
+            if (!this.getPlayer(player).Turn)
             {
                 return;
             }
 
-            this.turnPlayer.Remove(player.SteamID);
+            this.getPlayer(player).Turn = false;
             this.getPlayer(player).IsZombie = true;
             this.forcePlayerToCorrectTeam(player);
             this.Server.SayToAllChat($"<b>{player.Name}<b> is now a <color=\"red\">zombie<color=\"white\">!");
+            this.DiscordWebhooks?.Call("SendMessage", $"Player {player.Name} died and has become a zombie.");
 
             await checkGameEnd();
+        }
+
+        public override Task OnSessionChanged(long oldSessionID, long newSessionID)
+        {
+            foreach (ZombiesPlayer player in this.players.Values)
+            {
+                player.Turn = false;
+                player.IsZombie = false;
+            }
+
+            return Task.CompletedTask;
         }
 
         private async Task checkGameEnd()
@@ -380,7 +388,7 @@ namespace Zombies
                 return;
             }
 
-            int humanCount = this.Server.AllPlayers.Count(player => !this.getPlayer(player).IsZombie);
+            int humanCount = this.Server.AllPlayers.Count(player => !this.getPlayer(player).IsZombie && !player.IsDown);
 
             if (humanCount == 0)
             {
@@ -502,6 +510,7 @@ namespace Zombies
         }
 
         public bool IsZombie { get; set; }
+        public bool Turn { get; set; }
     }
 
     public class ZombiesConfiguration : ModuleConfiguration
