@@ -40,7 +40,7 @@ namespace Zombies
 
         private bool safetyEnding = false;
         private int amountOfHumansAnnounced = int.MaxValue;
-        private List<ulong> zombies = new();
+        private Dictionary<ulong, ZombiesPlayer> players = new();
 
         public override void OnModulesLoaded()
         {
@@ -48,32 +48,18 @@ namespace Zombies
             this.DiscordWebhooks?.Call("SendMessage", "Zombies game mode loaded");
         }
 
-        private bool isZombie(RunnerPlayer player)
+        private ZombiesPlayer getPlayer(RunnerPlayer player)
         {
-            return this.zombies.Contains(player.SteamID);
-        }
-
-        private void setZombie(RunnerPlayer player, bool zombie)
-        {
-            if (zombie && !this.zombies.Contains(player.SteamID))
-            {
-                this.zombies.Add(player.SteamID);
-            }
-            else if (!zombie && this.zombies.Contains(player.SteamID))
-            {
-                this.zombies.Remove(player.SteamID);
-            }
+            return this.players[player.SteamID];
         }
 
         public override async Task OnConnected()
         {
-            await base.OnConnected();
-
             this.Server.GamemodeRotation.AddToRotation("FRONTLINE");
 
             foreach (RunnerPlayer player in this.Server.AllPlayers)
             {
-                this.setZombie(player, player.Team == ZOMBIES);
+                this.getPlayer(player).IsZombie = player.Team == ZOMBIES;
             }
 
             this.Server.RoundSettings.PlayersToStart = this.Configuration.RequiredPlayersToStart;
@@ -96,25 +82,23 @@ namespace Zombies
         {
             StringBuilder sb = new();
             sb.AppendLine("<b>==ZOMBIES==</b>");
-            sb.AppendLine(string.Join(" / ", this.Server.AllPlayers.Where(p => this.isZombie(p)).Select(p => $"{p.Name} is {(p.IsAlive ? "<color=\"green\">alive" : "<color=\"red\">dead")}<color=\"white\">")));
+            sb.AppendLine(string.Join(" / ", this.Server.AllPlayers.Where(p => this.getPlayer(p).IsZombie).Select(p => $"{p.Name} is {(p.IsAlive ? "<color=\"green\">alive" : "<color=\"red\">dead")}<color=\"white\">")));
             sb.AppendLine("<b>==HUMANS==</b>");
-            sb.AppendLine(string.Join(" / ", this.Server.AllPlayers.Where(p => !this.isZombie(p)).Select(p => $"{p.Name} is {(p.IsAlive ? "<color=\"green\">alive" : "<color=\"red\">dead")}<color=\"white\">")));
+            sb.AppendLine(string.Join(" / ", this.Server.AllPlayers.Where(p => !this.getPlayer(p).IsZombie).Select(p => $"{p.Name} is {(p.IsAlive ? "<color=\"green\">alive" : "<color=\"red\">dead")}<color=\"white\">")));
             player.Message(sb.ToString());
         }
 
         [CommandCallback("zombie", Description = "Check whether you're a zombie or not")]
         public void ZombieCommand(RunnerPlayer player)
         {
-            this.Server.SayToChat($"{player.Name} is {(this.isZombie(player) ? "a" : $"not {(this.turnPlayer.Contains(player.SteamID) ? "yet " : "")}a")} zombie");
+            this.Server.SayToChat($"{player.Name} is {(this.getPlayer(player).IsZombie ? "a" : $"not {(this.turnPlayer.Contains(player.SteamID) ? "yet " : "")}a")} zombie");
         }
 
-        public override async Task OnGameStateChanged(GameState oldState, GameState newState)
+        public override Task OnGameStateChanged(GameState oldState, GameState newState)
         {
-            await base.OnGameStateChanged(oldState, newState);
-
             if (oldState == newState)
             {
-                return;
+                return Task.CompletedTask;
             }
 
             switch (newState)
@@ -134,12 +118,14 @@ namespace Zombies
                 default:
                     break;
             }
+
+            return Task.CompletedTask;
         }
 
         #region Team Handling
-        private async Task forcePlayerToCorrectTeam(RunnerPlayer player)
+        private void forcePlayerToCorrectTeam(RunnerPlayer player)
         {
-            if (player.Team == (this.isZombie(player) ? ZOMBIES : HUMANS))
+            if (player.Team == (this.getPlayer(player).IsZombie ? ZOMBIES : HUMANS))
             {
                 return;
             }
@@ -147,48 +133,52 @@ namespace Zombies
             player.Kill();
             player.ChangeTeam();
 
-            if (this.isZombie(player))
+            if (this.getPlayer(player).IsZombie)
             {
                 player.Message("You have been infected and are now a zombie!", 10);
             }
-
-            await Task.CompletedTask;
         }
 
-        public override async Task OnPlayerConnected(RunnerPlayer player)
+        public override Task OnPlayerConnected(RunnerPlayer player)
         {
-            await base.OnPlayerConnected(player);
+            if (!this.players.ContainsKey(player.SteamID))
+            {
+                this.players.Add(player.SteamID, new ZombiesPlayer(player));
+            }
 
             if (this.Server.RoundSettings.State == GameState.Playing)
             {
-                this.setZombie(player, true);
+                this.getPlayer(player).IsZombie = true;
             }
             else
             {
-                this.setZombie(player, this.Server.AllPlayers.Count(p => this.isZombie(p)) < this.Configuration.InitialZombieCount && player.Team == ZOMBIES);
+                this.getPlayer(player).IsZombie = this.Server.AllPlayers.Count(p => this.getPlayer(p).IsZombie) < this.Configuration.InitialZombieCount && player.Team == ZOMBIES;
             }
-            await this.forcePlayerToCorrectTeam(player);
+            this.forcePlayerToCorrectTeam(player);
             this.Server.SayToChat($"Welcome {player.Name} to the server!");
+
+            return Task.CompletedTask;
         }
 
-        public override async Task OnPlayerDisconnected(RunnerPlayer player)
+        public override Task OnPlayerDisconnected(RunnerPlayer player)
         {
-            await base.OnPlayerDisconnected(player);
-
-            if (!this.Server.AllPlayers.Any(p => this.isZombie(p)) && this.Server.AllPlayers.Any())
+            if (!this.Server.AllPlayers.Any(p => this.getPlayer(p).IsZombie) && this.Server.AllPlayers.Any())
             {
                 RunnerPlayer newZombie = this.Server.AllPlayers.Skip(Random.Shared.Next(0, this.Server.AllPlayers.Count())).First();
-                this.setZombie(newZombie, true);
-                await this.forcePlayerToCorrectTeam(newZombie);
+                this.getPlayer(newZombie).IsZombie = true;
+                this.forcePlayerToCorrectTeam(newZombie);
             }
 
+            this.players.Remove(player.SteamID);
+
+            return Task.CompletedTask;
         }
 
-        public override async Task OnPlayerChangeTeam(RunnerPlayer player, Team team)
+        public override Task OnPlayerChangeTeam(RunnerPlayer player, Team team)
         {
-            await base.OnPlayerChangeTeam(player, team);
+            this.forcePlayerToCorrectTeam(player);
 
-            await this.forcePlayerToCorrectTeam(player);
+            return Task.CompletedTask;
         }
         #endregion
 
@@ -200,11 +190,13 @@ namespace Zombies
             return Task.CompletedTask;
         }
 
-        private List<ulong> allowedToSpawn = new();
-
-        public override Task<OnPlayerSpawnArguments> OnPlayerSpawning(RunnerPlayer player, OnPlayerSpawnArguments request)
+        public override Task<OnPlayerSpawnArguments?> OnPlayerSpawning(RunnerPlayer player, OnPlayerSpawnArguments request)
         {
-            this.allowedToSpawn.Add(player.SteamID);
+            if (player.Team != (this.getPlayer(player).IsZombie ? ZOMBIES : HUMANS))
+            {
+                this.forcePlayerToCorrectTeam(player);
+                return Task.FromResult<OnPlayerSpawnArguments?>(null);
+            }
 
             if (player.Team == HUMANS)
             {
@@ -233,12 +225,13 @@ namespace Zombies
                 request.Wearings.Uniform = HUMAN_UNIFORM[Random.Shared.Next(0, HUMAN_UNIFORM.Length)];
                 request.Wearings.Head = HUMAN_HELMET[Random.Shared.Next(0, HUMAN_HELMET.Length)];
 
-                return Task.FromResult(request);
+                return Task.FromResult(request as OnPlayerSpawnArguments?);
             }
 
             if (request.RequestedPoint != PlayerSpawningPosition.SpawnAtPoint)
             {
-                this.allowedToSpawn.Remove(player.SteamID);
+                player.Message("Zombies can only spawn on points.", 10);
+                return Task.FromResult<OnPlayerSpawnArguments?>(null);
             }
 
             // Zombies can only spawn with melee weapons
@@ -262,19 +255,11 @@ namespace Zombies
             request.Wearings.Backbag = ZOMBIE_BACKPACK[Random.Shared.Next(0, ZOMBIE_BACKPACK.Length)];
             request.Wearings.Belt = ZOMBIE_BELT[Random.Shared.Next(0, ZOMBIE_BELT.Length)];
 
-            return Task.FromResult(request);
+            return Task.FromResult(request as OnPlayerSpawnArguments?);
         }
 
         public override async Task OnPlayerSpawned(RunnerPlayer player)
         {
-            await base.OnPlayerSpawned(player);
-
-            if (player.Team != (this.isZombie(player) ? ZOMBIES : HUMANS))
-            {
-                player.Kill();
-                await this.forcePlayerToCorrectTeam(player);
-            }
-
             if (player.Team == ZOMBIES)
             {
                 // Zombies are faster, jump higher, have more health and one-hit
@@ -282,18 +267,12 @@ namespace Zombies
                 player.Modifications.RunningSpeedMultiplier = 1.2f; // TODO: anti cheat kicks because of this
                 player.Modifications.JumpHeightMultiplier = 2.5f;
 
-                var ratio = (float)this.Server.AllPlayers.Count(p => this.isZombie(p)) / ((float)this.Server.AllPlayers.Count() - 1);
+                var ratio = (float)this.Server.AllPlayers.Count(p => this.getPlayer(p).IsZombie) / ((float)this.Server.AllPlayers.Count() - 1);
                 var multiplier = this.Configuration.ZombieMinDamageReceived + (this.Configuration.ZombieMaxDamageReceived - this.Configuration.ZombieMinDamageReceived) * ratio;
                 player.Modifications.ReceiveDamageMultiplier = multiplier;
                 await Console.Out.WriteLineAsync($"Damage received multiplier of {player.Name} is set to " + multiplier);
 
                 player.Modifications.GiveDamageMultiplier = 10f; // TODO: does not count for gadgets
-
-                if (!this.allowedToSpawn.Contains(player.SteamID))
-                {
-                    player.Kill();
-                    player.Message("<color=\"red\">You are only allowed to spawn on points.", 10);
-                }
 
                 return;
             }
@@ -357,7 +336,7 @@ namespace Zombies
 
                         if (player.Team == HUMANS)
                         {
-                            this.setZombie(player, true);
+                            this.getPlayer(player).IsZombie = true;
                             player.ChangeTeam(ZOMBIES);
                             player.Message("You have been infected and are now a zombie!", 10);
                             this.Server.SayToChat($"<b>{player.Name}<b> is now a <color=\"red\">zombie<color=\"white\">!");
@@ -383,8 +362,8 @@ namespace Zombies
             }
 
             this.turnPlayer.Remove(player.SteamID);
-            this.setZombie(player, true);
-            await this.forcePlayerToCorrectTeam(player);
+            this.getPlayer(player).IsZombie = true;
+            this.forcePlayerToCorrectTeam(player);
             this.Server.SayToChat($"<b>{player.Name}<b> is now a <color=\"red\">zombie<color=\"white\">!");
 
             await checkGameEnd();
@@ -397,7 +376,7 @@ namespace Zombies
                 return;
             }
 
-            int humanCount = this.Server.AllPlayers.Count(player => !this.isZombie(player));
+            int humanCount = this.Server.AllPlayers.Count(player => !this.getPlayer(player).IsZombie);
 
             if (humanCount == 0)
             {
@@ -415,7 +394,7 @@ namespace Zombies
                 {
                     if (humanCount == 1)
                     {
-                        RunnerPlayer? lastHuman = this.Server.AllPlayers.FirstOrDefault(p => !this.isZombie(p));
+                        RunnerPlayer? lastHuman = this.Server.AllPlayers.FirstOrDefault(p => !this.getPlayer(p).IsZombie);
                         if (lastHuman != null)
                         {
                             this.Server.AnnounceShort($"<b>{lastHuman.Name}<b> is the LAST HUMAN, <color=\"red\">KILL IT!");
@@ -484,9 +463,9 @@ namespace Zombies
         public async void SwitchCommand(RunnerPlayer source, RunnerPlayer target)
         {
             target.Kill();
-            this.setZombie(target, !this.isZombie(target));
-            await this.forcePlayerToCorrectTeam(target);
-            if (this.isZombie(target))
+            this.getPlayer(target).IsZombie = !this.getPlayer(target).IsZombie;
+            this.forcePlayerToCorrectTeam(target);
+            if (this.getPlayer(target).IsZombie)
             {
                 this.Server.SayToChat($"<b>{target.Name}<b> is now a <color=\"red\">zombie<color=\"white\">!");
             }
@@ -507,6 +486,18 @@ namespace Zombies
         FallDamageMultiplier,
         RunningSpeedMultiplier,
         JumpHeightMultiplier
+    }
+
+    public class ZombiesPlayer
+    {
+        public RunnerPlayer Player { get; set; }
+
+        public ZombiesPlayer(RunnerPlayer player)
+        {
+            this.Player = player;
+        }
+
+        public bool IsZombie { get; set; }
     }
 
     public class ZombiesConfiguration : ModuleConfiguration
