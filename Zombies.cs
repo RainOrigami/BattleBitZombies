@@ -72,13 +72,12 @@ namespace Zombies
             Task.Run(async () =>
 #pragma warning restore CS4014
             {
-                while (this.Server.IsConnected)
+                while (this.IsLoaded && this.Server.IsConnected)
                 {
                     await checkGameEnd();
                     await Task.Delay(10000);
                 }
             });
-
         }
 
         [CommandCallback("list", Description = "List all players and their status")]
