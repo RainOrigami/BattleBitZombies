@@ -18,8 +18,10 @@ namespace Zombies
         private const Team HUMANS = Team.TeamA;
         private const Team ZOMBIES = Team.TeamB;
 
-        private static readonly string[] HUMAN_UNIFORM = new[] { "USA_NU_Uniform_Uni_02", "USA_NU_Uniform_Uni_03_Patreon", "RUS_NU_Uniform_Uni_02", "RUS_NU_Uniform_Uni_02_Patreon" };
-        private static readonly string[] HUMAN_HELMET = new[] { "USV2_Universal_DON_Helmet_00_A_Z", "RUV2_Universal_DON_Helmet_00_A_Z", "USV2_Universal_All_Helmet_01_A_Z", "RUV2_Universal_All_Helmet_01_A_Z", "USV2_Universal_DON_Helmet_01_A_Z", "RUV2_Universal_DON_Helmet_01_A_Z", "RUV2_Universal_All_Helmet_00_A_Z", "RUV2_Universal_All_Helmet_00_A_Z", "USV2_Assault_All_Helmet_00_D_N", "RUV2_Assault_All_Helmet_00_D_N", "USV2_Medic_All_Helmet_00_A_Z", "RUV2_Medic_All_Helmet_00_A_Z", "USV2_Medic_All_Helmet_01_A_Z", "RUV2_Medic_All_Helmet_01_A_Z", "USV2_Engineer_All_Helmet_00_A_Z", "RUV2_Engineer_All_Helmet_00_A_Z", "RUV2_Engineer_All_Helmet_00_B_Z", "USV2_Engineer_VIP_Helmet_00_A_Z", "RUV2_Engineer_VIP_Helmet_00_A_Z", "USV2_Engineer_DON_Helmet_00_A_Z", "RUV2_Engineer_DON_Helmet_00_A_Z", "USV2_Engineer_All_Helmet_01_C_N", "RUV2_Engineer_All_Helmet_01_C_N", "USV2_Sniper_All_Helmet_00_A_Z", "RUV2_Sniper_All_Helmet_00_A_Z", "USV2_Sniper_All_Helmet_01_A_Z", "RUV2_Sniper_All_Helmet_01_A_Z", "USV2_Leader_All_Helmet_00_A_Z", "RUV2_Leader_All_Helmet_00_A_Z" };
+        private static readonly string[] HUMAN_UNIFORM = new[] { "ANY_NU_Uniform_Survivor_00", "ANY_NU_Uniform_Survivor_01", "ANY_NU_Uniform_Survivor_02", "ANY_NU_Uniform_Survivor_03", "ANY_NU_Uniform_Survivor_04" };
+        private static readonly string[] HUMAN_HELMET = new[] { "ANV2_Survivor_All_Helmet_00_A_Z", "ANV2_Survivor_All_Helmet_00_B_Z", "ANV2_Survivor_All_Helmet_01_A_Z", "ANV2_Survivor_All_Helmet_02_A_Z", "ANV2_Survivor_All_Helmet_03_A_Z", "ANV2_Survivor_All_Helmet_04_A_Z", "ANV2_Survivor_All_Helmet_05_A_Z", "ANV2_Survivor_All_Helmet_05_B_Z" };
+        private static readonly string[] HUMAN_BACKPACK = new[] { "ANV2_Survivor_All_Backpack_00_A_H", "ANV2_Survivor_All_Backpack_00_A_N", "ANV2_Survivor_All_Backpack_01_A_H", "ANV2_Survivor_All_Backpack_01_A_N", "ANV2_Survivor_All_Backpack_02_A_N" };
+        private static readonly string[] HUMAN_ARMOR = new[] { "ANV2_Survivor_All_Armor_00_A_L", "ANV2_Survivor_All_Armor_00_A_N", "ANV2_Survivor_All_Armor_01_A_L", "ANV2_Survivor_All_Armor_02_A_L" };
         private static readonly string[] ZOMBIE_EYES = new[] { "Eye_Zombie_01" };
         private static readonly string[] ZOMBIE_FACE = new[] { "Face_Zombie_01" };
         private static readonly string[] ZOMBIE_HAIR = new[] { "Hair_Zombie_01" };
@@ -227,6 +229,8 @@ namespace Zombies
                 // Human skins
                 request.Wearings.Uniform = HUMAN_UNIFORM[Random.Shared.Next(0, HUMAN_UNIFORM.Length)];
                 request.Wearings.Head = HUMAN_HELMET[Random.Shared.Next(0, HUMAN_HELMET.Length)];
+                request.Wearings.Backbag = HUMAN_BACKPACK[Random.Shared.Next(0, HUMAN_BACKPACK.Length)];
+                request.Wearings.Chest = HUMAN_ARMOR[Random.Shared.Next(0, HUMAN_ARMOR.Length)];
 
                 return Task.FromResult(request as OnPlayerSpawnArguments?);
             }
