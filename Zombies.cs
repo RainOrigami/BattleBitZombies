@@ -241,6 +241,19 @@ namespace Zombies
                     request.Loadout.SecondaryWeapon.SideRail = HUMAN_FLASHLIGHTS[Random.Shared.Next(0, HUMAN_FLASHLIGHTS.Length)];
                 }
 
+                if (this.Server.AllPlayers.Count() < 16 && this.Server.AllPlayers.Count(p => !this.getPlayer(p).IsZombie) >= this.Server.AllPlayers.Count(p => this.getPlayer(p).IsZombie))
+                {
+                    request.Loadout.Throwable = null;
+                    request.Loadout.ThrowableExtra = 0;
+                    request.Loadout.HeavyGadget = null;
+                    request.Loadout.HeavyGadgetExtra = 0;
+                    request.Loadout.LightGadget = null;
+                    request.Loadout.LightGadgetExtra = 0;
+                    request.Loadout.PrimaryWeapon.Tool = null;
+                    request.Loadout.PrimaryExtraMagazines = 0;
+                    request.Loadout.SecondaryExtraMagazines = 10;
+                }
+
                 return Task.FromResult(request as OnPlayerSpawnArguments?);
             }
 
@@ -400,6 +413,25 @@ namespace Zombies
                 return;
             }
 
+            if (this.Server.AllPlayers.Count() < 16 && this.Server.AllPlayers.Count(p => !this.getPlayer(p).IsZombie) < this.Server.AllPlayers.Count(p => this.getPlayer(p).IsZombie))
+            {
+                foreach (RunnerPlayer player in this.Server.AllPlayers.Where(p => !this.getPlayer(p).IsZombie && p.CurrentLoadout.Throwable == null && p.IsAlive && !p.IsDown))
+                {
+                    player.SetPrimaryWeapon(new WeaponItem()
+                    {
+                        Tool = Weapons.M4A1,
+                        MainSight = Attachments.RedDot,
+                        Barrel = Attachments.SuppressorLong,
+                        SideRail = this.Server.DayNight == MapDayNight.Night ? HUMAN_FLASHLIGHTS[Random.Shared.Next(0, HUMAN_FLASHLIGHTS.Length)] : Attachments.Redlaser,
+                        UnderRail = Attachments.VerticalGrip
+                    }, 20, true);
+
+                    player.SetThrowable(Gadgets.ImpactGrenade.Name, 6, true);
+                    player.SetFirstAidGadget(Gadgets.Bandage.Name, 6, true);
+                    player.SetHeavyGadget(Gadgets.HeavyAmmoKit.Name, 2, true);
+                    player.SetLightGadget(Gadgets.C4.Name, 4, true);
+                }
+            }
             int humanCount = this.Server.AllPlayers.Count(player => !this.getPlayer(player).IsZombie && !player.IsDown);
 
             if (humanCount == 0)
