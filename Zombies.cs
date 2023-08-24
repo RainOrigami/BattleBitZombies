@@ -82,6 +82,28 @@ namespace Zombies
                     await Task.Delay(10000);
                 }
             });
+
+            //Task.Run(humanExposer);
+        }
+
+        private async Task humanExposer()
+        {
+            while (this.IsLoaded && this.Server.IsConnected)
+            {
+                foreach (RunnerPlayer player in this.Server.AllPlayers.Where(p => !this.getPlayer(p).IsZombie))
+                {
+                    //player.Modifications.IsExposedOnMap = true;
+                }
+
+                await Task.Delay(3000);
+
+                foreach (RunnerPlayer player in this.Server.AllPlayers.Where(p => !this.getPlayer(p).IsZombie))
+                {
+                    //player.Modifications.IsExposedOnMap = false;
+                }
+
+                await Task.Delay(10000);
+            }
         }
 
         [CommandCallback("list", Description = "List all players and their status")]
