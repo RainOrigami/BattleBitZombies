@@ -32,6 +32,8 @@ namespace Zombies
         private static readonly string[] ZOMBIE_BACKPACK = new[] { "ANV2_Universal_All_Backpack_Null" };
         private static readonly string[] ZOMBIE_BELT = new[] { "ANV2_Universal_All_Belt_Null" };
 
+        private static readonly Attachment[] HUMAN_FLASHLIGHTS = new[] { Attachments.Flashlight, Attachments.Searchlight, Attachments.TacticalFlashlight };
+
         public ZombiesConfiguration Configuration { get; set; }
 
         [ModuleReference]
@@ -231,6 +233,13 @@ namespace Zombies
                 request.Wearings.Head = HUMAN_HELMET[Random.Shared.Next(0, HUMAN_HELMET.Length)];
                 request.Wearings.Backbag = HUMAN_BACKPACK[Random.Shared.Next(0, HUMAN_BACKPACK.Length)];
                 request.Wearings.Chest = HUMAN_ARMOR[Random.Shared.Next(0, HUMAN_ARMOR.Length)];
+
+                if (this.Server.DayNight == MapDayNight.Night)
+                {
+                    // Force flashlight on primary and secondary
+                    request.Loadout.PrimaryWeapon.SideRail = HUMAN_FLASHLIGHTS[Random.Shared.Next(0, HUMAN_FLASHLIGHTS.Length)];
+                    request.Loadout.SecondaryWeapon.SideRail = HUMAN_FLASHLIGHTS[Random.Shared.Next(0, HUMAN_FLASHLIGHTS.Length)];
+                }
 
                 return Task.FromResult(request as OnPlayerSpawnArguments?);
             }
