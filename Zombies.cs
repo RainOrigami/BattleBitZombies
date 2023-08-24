@@ -40,7 +40,7 @@ namespace Zombies
         public CommandHandler CommandHandler { get; set; }
 
         [ModuleReference]
-        public BattleBitModule? DiscordWebhooks { get; set; }
+        public dynamic? DiscordWebhooks { get; set; }
 
         private bool safetyEnding = false;
         private int amountOfHumansAnnounced = int.MaxValue;
@@ -49,7 +49,7 @@ namespace Zombies
         public override void OnModulesLoaded()
         {
             this.CommandHandler.Register(this);
-            this.DiscordWebhooks?.Call("SendMessage", "Zombies game mode loaded");
+            this.DiscordWebhooks?.SendMessage("Zombies game mode loaded");
         }
 
         private ZombiesPlayer getPlayer(RunnerPlayer player)
@@ -365,7 +365,7 @@ namespace Zombies
                             player.ChangeTeam(ZOMBIES);
                             player.Message("You have been infected and are now a zombie!", 10);
                             this.Server.SayToAllChat($"<b>{player.Name}<b> is now a <color=\"red\">zombie<color=\"white\">!");
-                            this.DiscordWebhooks?.Call("SendMessage", $"Player {playerKill.Victim.Name} succumbed to the bite and has become a zombie.");
+                            this.DiscordWebhooks?.SendMessage($"Player {playerKill.Victim.Name} succumbed to the bite and has become a zombie.");
                             await this.checkGameEnd();
                         }
                     });
@@ -390,7 +390,7 @@ namespace Zombies
             this.getPlayer(player).IsZombie = true;
             this.forcePlayerToCorrectTeam(player);
             this.Server.SayToAllChat($"<b>{player.Name}<b> is now a <color=\"red\">zombie<color=\"white\">!");
-            this.DiscordWebhooks?.Call("SendMessage", $"Player {player.Name} died and has become a zombie.");
+            this.DiscordWebhooks?.SendMessage($"Player {player.Name} died and has become a zombie.");
 
             await checkGameEnd();
         }
@@ -432,13 +432,14 @@ namespace Zombies
                     player.SetLightGadget(Gadgets.C4.Name, 4, true);
                 }
             }
+
             int humanCount = this.Server.AllPlayers.Count(player => !this.getPlayer(player).IsZombie && !player.IsDown);
 
             if (humanCount == 0)
             {
                 safetyEnding = true;
                 this.Server.AnnounceLong("ZOMBIES WIN!");
-                this.DiscordWebhooks?.Call("SendMessage", $"== ZOMBIES WIN ==");
+                this.DiscordWebhooks?.SendMessage($"== ZOMBIES WIN ==");
                 await Task.Delay(2000);
                 this.Server.ForceEndGame();
                 return;
