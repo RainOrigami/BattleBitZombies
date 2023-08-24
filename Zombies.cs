@@ -141,6 +141,8 @@ namespace Zombies
                 case GameState.Playing:
                     safetyEnding = false;
                     amountOfHumansAnnounced = int.MaxValue;
+                    //this.Server.ServerSettings.CanVoteDay = Random.Shared.Next(0, 3) != 3;
+                    //this.Server.ServerSettings.CanVoteNight = true;
                     break;
                 case GameState.EndingGame:
                     break;
