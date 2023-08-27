@@ -84,7 +84,7 @@ namespace Zombies
                 }
             });
 
-            //Task.Run(humanExposer);
+            Task.Run(humanExposer);
         }
 
         private async Task humanExposer()
@@ -93,14 +93,14 @@ namespace Zombies
             {
                 foreach (RunnerPlayer player in this.Server.AllPlayers.Where(p => !this.getPlayer(p).IsZombie))
                 {
-                    //player.Modifications.IsExposedOnMap = true;
+                    player.Modifications.IsExposedOnMap = true;
                 }
 
                 await Task.Delay(3000);
 
                 foreach (RunnerPlayer player in this.Server.AllPlayers.Where(p => !this.getPlayer(p).IsZombie))
                 {
-                    //player.Modifications.IsExposedOnMap = false;
+                    player.Modifications.IsExposedOnMap = false;
                 }
 
                 await Task.Delay(10000);
