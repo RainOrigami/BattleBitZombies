@@ -60,6 +60,7 @@ namespace Zombies
         public override async Task OnConnected()
         {
             this.Server.GamemodeRotation.AddToRotation("FRONTLINE");
+            this.Server.ServerSettings.UnlockAllAttachments = true;
 
             foreach (RunnerPlayer player in this.Server.AllPlayers)
             {
