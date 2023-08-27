@@ -16,7 +16,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="BBRAPIModules" Version="0.4.5" />
+    <PackageReference Include="BBRAPIModules" Version="0.4.7" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
   </ItemGroup>
 
