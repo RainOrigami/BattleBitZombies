@@ -504,6 +504,8 @@ namespace Zombies
                 safetyEnding = true;
                 this.Server.AnnounceLong("ZOMBIES WIN!");
                 this.DiscordWebhooks?.SendMessage($"== ZOMBIES WIN ==");
+                this.Server.RoundSettings.TeamATickets = 0;
+                this.Server.RoundSettings.TeamBTickets = 1000;
                 await Task.Delay(2000);
                 this.Server.ForceEndGame();
                 return;
