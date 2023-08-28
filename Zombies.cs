@@ -103,6 +103,10 @@ namespace Zombies
 
                 await Task.Delay(3000);
 
+                if (!this.IsLoaded || !this.Server.IsConnected)
+                {
+                    return;
+                }
                 foreach (RunnerPlayer player in this.Server.AllPlayers.Where(p => !this.getPlayer(p).IsZombie))
                 {
                     player.Modifications.IsExposedOnMap = false;
