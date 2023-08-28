@@ -356,6 +356,8 @@ namespace Zombies
                 player.Modifications.RunningSpeedMultiplier = this.Configuration.RunningSpeedMultiplier;
                 player.Modifications.JumpHeightMultiplier = this.Configuration.JumpHeightMultiplier;
 
+                player.Modifications.CanUseNightVision = true;
+
                 var ratio = (float)this.Server.AllPlayers.Count(p => this.getPlayer(p).IsZombie) / ((float)this.Server.AllPlayers.Count() - 1);
                 var multiplier = this.Configuration.ZombieMinDamageReceived + (this.Configuration.ZombieMaxDamageReceived - this.Configuration.ZombieMinDamageReceived) * ratio;
                 player.Modifications.ReceiveDamageMultiplier = multiplier;
