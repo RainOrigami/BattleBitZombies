@@ -1,5 +1,6 @@
 ﻿using BattleBitAPI;
 using BattleBitAPI.Common;
+using BattleBitAPI.Server;
 using BBRAPIModules;
 using Commands;
 using System;
@@ -90,6 +91,27 @@ namespace Zombies
             });
 
             Task.Run(humanExposer);
+            Task.Run(squadPointProvider);
+        }
+
+        private async Task squadPointProvider()
+        {
+            while (this.IsLoaded && this.Server.IsConnected)
+            {
+                foreach (Squad<RunnerPlayer> squad in this.Server.AllSquads)
+                {
+                    if (squad.Team == HUMANS)
+                    {
+                        squad.SquadPoints = 1000;
+                    }
+                    else
+                    {
+                        squad.SquadPoints = 0;
+                    }
+                }
+
+                await Task.Delay(1000);
+            }
         }
 
         private async Task humanExposer()
