@@ -155,6 +155,7 @@ namespace Zombies
                     this.Server.ServerSettings.CanVoteNight = true;
                     break;
                 case GameState.EndingGame:
+                    this.Server.RoundSettings.SecondsLeft = 30;
                     break;
                 default:
                     break;
