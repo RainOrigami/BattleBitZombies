@@ -242,6 +242,11 @@ namespace Zombies
             return Task.CompletedTask;
         }
 
+        public override Task<bool> OnPlayerRequestingToChangeTeam(RunnerPlayer player, Team requestedTeam)
+        {
+            return Task.FromResult(false);
+        }
+
         public override Task OnPlayerChangeTeam(RunnerPlayer player, Team team)
         {
             this.forcePlayerToCorrectTeam(player);
