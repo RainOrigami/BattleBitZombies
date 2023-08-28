@@ -488,12 +488,12 @@ namespace Zombies
                         Barrel = Attachments.SuppressorLong,
                         SideRail = this.Server.DayNight == MapDayNight.Night ? HUMAN_FLASHLIGHTS[Random.Shared.Next(0, HUMAN_FLASHLIGHTS.Length)] : Attachments.Redlaser,
                         UnderRail = Attachments.VerticalGrip
-                    }, 20, true);
+                    }, 20, false);
 
-                    player.SetThrowable(Gadgets.ImpactGrenade.Name, 6, true);
-                    player.SetFirstAidGadget(Gadgets.Bandage.Name, 6, true);
-                    player.SetHeavyGadget(Gadgets.HeavyAmmoKit.Name, 2, true);
-                    player.SetLightGadget(Gadgets.C4.Name, 4, true);
+                    player.SetThrowable(Gadgets.ImpactGrenade.Name, 6, false);
+                    player.SetFirstAidGadget(Gadgets.Bandage.Name, 6, false);
+                    player.SetHeavyGadget(Gadgets.HeavyAmmoKit.Name, 2, false);
+                    player.SetLightGadget(Gadgets.C4.Name, 4, false);
                 }
             }
 
