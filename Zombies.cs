@@ -361,7 +361,7 @@ namespace Zombies
                 var ratio = (float)this.Server.AllPlayers.Count(p => this.getPlayer(p).IsZombie) / ((float)this.Server.AllPlayers.Count() - 1);
                 var multiplier = this.Configuration.ZombieMinDamageReceived + (this.Configuration.ZombieMaxDamageReceived - this.Configuration.ZombieMinDamageReceived) * ratio;
                 player.Modifications.ReceiveDamageMultiplier = multiplier;
-                await Console.Out.WriteLineAsync($"Damage received multiplier of {player.Name} is set to " + multiplier);
+                await Console.Out.WriteLineAsync($"Damage received multiplier of {player.Name} is set to {multiplier} ({ratio} zombie/total ratio)");
 
                 return;
             }
