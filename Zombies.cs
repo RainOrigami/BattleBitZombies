@@ -54,6 +54,11 @@ namespace Zombies
 
         private ZombiesPlayer getPlayer(RunnerPlayer player)
         {
+            if (!this.players.ContainsKey(player.SteamID))
+            {
+                Console.WriteLine($"Player {player.Name} ({player.SteamID} is not in the player list.");
+            }
+
             return this.players[player.SteamID];
         }
 
