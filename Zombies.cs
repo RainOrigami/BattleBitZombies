@@ -167,6 +167,8 @@ namespace Zombies
         #region Team Handling
         private void forcePlayerToCorrectTeam(RunnerPlayer player)
         {
+            player.Modifications.SpawningRule = this.getPlayer(player).IsZombie ? (SpawningRule.Flags | SpawningRule.SquadCaptain) : SpawningRule.All;
+
             if (player.Team == (this.getPlayer(player).IsZombie ? ZOMBIES : HUMANS))
             {
                 return;
@@ -183,6 +185,8 @@ namespace Zombies
 
         public override Task OnPlayerConnected(RunnerPlayer player)
         {
+            player.Modifications.SpawningRule = SpawningRule.All;
+
             if (!this.players.ContainsKey(player.SteamID))
             {
                 this.players.Add(player.SteamID, new ZombiesPlayer(player));
@@ -292,12 +296,6 @@ namespace Zombies
                 return Task.FromResult(request as OnPlayerSpawnArguments?);
             }
 
-            if (request.RequestedPoint != PlayerSpawningPosition.SpawnAtPoint)
-            {
-                player.Message("Zombies can only spawn on points.", 10);
-                return Task.FromResult<OnPlayerSpawnArguments?>(null);
-            }
-
             // Zombies can only spawn with melee weapons
             request.Loadout.FirstAid = default;
             request.Loadout.PrimaryWeapon = default;
@@ -398,6 +396,7 @@ namespace Zombies
                         {
                             this.getPlayer(player).IsZombie = true;
                             player.ChangeTeam(ZOMBIES);
+                            player.Modifications.SpawningRule = SpawningRule.Flags | SpawningRule.SquadCaptain;
                             player.Message("You have been infected and are now a zombie!", 10);
                             this.Server.SayToAllChat($"<b>{player.Name}<b> is now a <color=\"red\">zombie<color=\"white\">!");
                             this.DiscordWebhooks?.SendMessage($"Player {playerKill.Victim.Name} succumbed to the bite and has become a zombie.");
@@ -421,6 +420,7 @@ namespace Zombies
                 return;
             }
 
+            player.Modifications.SpawningRule = SpawningRule.Flags | SpawningRule.SquadCaptain;
             this.getPlayer(player).Turn = false;
             this.getPlayer(player).IsZombie = true;
             this.forcePlayerToCorrectTeam(player);
