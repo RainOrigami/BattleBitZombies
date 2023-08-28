@@ -75,6 +75,7 @@ namespace Zombies
                     this.players.Add(player.SteamID, new ZombiesPlayer(player));
                 }
                 this.getPlayer(player).IsZombie = player.Team == ZOMBIES;
+                player.Modifications.CaptureFlagSpeedMultiplier = 0.5f;
             }
 
             this.Server.RoundSettings.PlayersToStart = this.Configuration.RequiredPlayersToStart;
@@ -208,7 +209,7 @@ namespace Zombies
         public override Task OnPlayerConnected(RunnerPlayer player)
         {
             player.Modifications.SpawningRule = SpawningRule.All;
-
+            player.Modifications.CaptureFlagSpeedMultiplier = 0.5f;
             if (!this.players.ContainsKey(player.SteamID))
             {
                 this.players.Add(player.SteamID, new ZombiesPlayer(player));
