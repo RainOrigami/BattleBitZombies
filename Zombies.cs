@@ -93,7 +93,7 @@ namespace Zombies
             });
 
             Task.Run(humanExposer);
-            Task.Run(squadPointProvider);
+            //Task.Run(squadPointProvider);
         }
 
         private async Task squadPointProvider()
