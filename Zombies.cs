@@ -466,6 +466,13 @@ namespace Zombies
             await Task.CompletedTask;
         }
 
+        public override Task OnAPlayerRevivedAnotherPlayer(RunnerPlayer from, RunnerPlayer to)
+        {
+            this.getPlayer(to).Turn = false;
+
+            return Task.CompletedTask;
+        }
+
         public override async Task OnPlayerDied(RunnerPlayer player)
         {
             if (!this.getPlayer(player).Turn)
@@ -507,7 +514,7 @@ namespace Zombies
                 foreach (RunnerPlayer player in this.Server.AllPlayers.Where(p => !this.getPlayer(p).IsZombie && p.IsAlive && !p.IsDown && !this.getPlayer(p).ReceivedLoadout))
                 {
                     this.getPlayer(player).ReceivedLoadout = true;
-                    
+
 
                     player.SetThrowable(Gadgets.ImpactGrenade.Name, 6, false);
                     player.SetFirstAidGadget(Gadgets.Bandage.Name, 6, false);
