@@ -489,6 +489,7 @@ namespace Zombies
             {
                 player.Turn = false;
                 player.IsZombie = false;
+                player.ReceivedLoadout = false;
             }
 
             return Task.CompletedTask;
@@ -503,8 +504,15 @@ namespace Zombies
 
             if (this.Server.AllPlayers.Count() < 16 && this.Server.AllPlayers.Count(p => !this.getPlayer(p).IsZombie) < this.Server.AllPlayers.Count(p => this.getPlayer(p).IsZombie))
             {
-                foreach (RunnerPlayer player in this.Server.AllPlayers.Where(p => !this.getPlayer(p).IsZombie && p.CurrentLoadout.Throwable == null && p.IsAlive && !p.IsDown))
+                foreach (RunnerPlayer player in this.Server.AllPlayers.Where(p => !this.getPlayer(p).IsZombie && p.IsAlive && !p.IsDown && !this.getPlayer(p).ReceivedLoadout))
                 {
+                    this.getPlayer(player).ReceivedLoadout = true;
+                    
+
+                    player.SetThrowable(Gadgets.ImpactGrenade.Name, 6, false);
+                    player.SetFirstAidGadget(Gadgets.Bandage.Name, 6, false);
+                    player.SetHeavyGadget(Gadgets.HeavyAmmoKit.Name, 2, false);
+                    player.SetLightGadget(Gadgets.C4.Name, 4, false);
                     player.SetPrimaryWeapon(new WeaponItem()
                     {
                         Tool = Weapons.M4A1,
@@ -513,11 +521,6 @@ namespace Zombies
                         SideRail = this.Server.DayNight == MapDayNight.Night ? HUMAN_FLASHLIGHTS[Random.Shared.Next(0, HUMAN_FLASHLIGHTS.Length)] : Attachments.Redlaser,
                         UnderRail = Attachments.VerticalGrip
                     }, 20, false);
-
-                    player.SetThrowable(Gadgets.ImpactGrenade.Name, 6, false);
-                    player.SetFirstAidGadget(Gadgets.Bandage.Name, 6, false);
-                    player.SetHeavyGadget(Gadgets.HeavyAmmoKit.Name, 2, false);
-                    player.SetLightGadget(Gadgets.C4.Name, 4, false);
                 }
             }
 
@@ -646,6 +649,7 @@ namespace Zombies
 
         public bool IsZombie { get; set; }
         public bool Turn { get; set; }
+        public bool ReceivedLoadout { get; set; } = false;
     }
 
     public class ZombiesConfiguration : ModuleConfiguration
