@@ -36,6 +36,7 @@ namespace Zombies
         private static readonly Attachment[] HUMAN_FLASHLIGHTS = new[] { Attachments.Flashlight, Attachments.Searchlight, Attachments.TacticalFlashlight };
 
         public ZombiesConfiguration Configuration { get; set; }
+        public ZombiesState State { get; set; }
 
         [ModuleReference]
         public CommandHandler CommandHandler { get; set; }
@@ -185,14 +186,25 @@ namespace Zombies
                     this.Server.RoundSettings.PlayersToStart = this.Configuration.RequiredPlayersToStart;
                     break;
                 case GameState.CountingDown:
-                    this.Server.RoundSettings.SecondsLeft = 10;
+                    this.Server.RoundSettings.SecondsLeft = 1;
 
                     foreach (RunnerPlayer player in this.Server.AllPlayers)
                     {
-                        player.Modifications.CanDeploy = true;
+                        player.Modifications.CanDeploy = false;
                         player.Modifications.CanSuicide = false;
                         player.Modifications.CanSpectate = false;
                     }
+
+                    if (this.Configuration.BuildPhaseDuration > 0)
+                    {
+                        // start the build phase
+                        this.State.BuildPhase = true;
+                        this.State.EndOfBuildPhase = DateTime.Now.AddSeconds(this.Configuration.BuildPhaseDuration);
+                        this.State.Save();
+
+                        Task.Run(buildStateManager);
+                    }
+
                     break;
                 case GameState.Playing:
                     safetyEnding = false;
@@ -202,12 +214,59 @@ namespace Zombies
                     break;
                 case GameState.EndingGame:
                     this.Server.RoundSettings.SecondsLeft = 30;
+                    this.State.BuildPhase = false;
+                    this.State.EndOfBuildPhase = DateTime.MinValue;
                     break;
                 default:
                     break;
             }
 
             return Task.CompletedTask;
+        }
+
+        private async Task buildStateManager()
+        {
+            if (!this.State.BuildPhase)
+            {
+                return;
+            }
+
+            // Let humans deploy
+            foreach (RunnerPlayer player in this.Server.AllPlayers)
+            {
+                if (!this.getPlayer(player).IsZombie || player.Team == HUMANS)
+                {
+                    player.Modifications.CanDeploy = true;
+                }
+            }
+
+            // Announce build phase
+            this.Server.AnnounceShort($"Human build phase has started! Zombies will arrive in {this.Configuration.BuildPhaseDuration} seconds!");
+
+            while (this.State.BuildPhase)
+            {
+                if (this.State.EndOfBuildPhase <= DateTime.Now)
+                {
+                    this.Server.AnnounceShort("Build phase has ended! Zombies are now released!");
+                    this.State.BuildPhase = false;
+                    this.State.EndOfBuildPhase = DateTime.MinValue;
+                    this.State.Save();
+
+                    foreach (RunnerPlayer player in this.Server.AllPlayers)
+                    {
+                        player.Modifications.CanDeploy = true;
+                    }
+
+                    break;
+                }
+
+                if (this.State.EndOfBuildPhase.AddSeconds(-10) <= DateTime.Now)
+                {
+                    this.Server.AnnounceShort($"Zombies will arrive in {this.State.EndOfBuildPhase.Subtract(DateTime.Now).TotalSeconds:0} seconds!");
+                }
+
+                await Task.Delay(1000);
+            }
         }
 
         #region Team Handling
@@ -607,6 +666,9 @@ namespace Zombies
                 case BalanceVariable.JumpHeightMultiplier:
                     this.Configuration.JumpHeightMultiplier = value;
                     break;
+                case BalanceVariable.BuildPhaseDuration:
+                    this.Configuration.BuildPhaseDuration = (int)value;
+                    break;
                 default:
                     break;
             }
@@ -640,7 +702,8 @@ namespace Zombies
         SuicideZombieficationMaxTime,
         FallDamageMultiplier,
         RunningSpeedMultiplier,
-        JumpHeightMultiplier
+        JumpHeightMultiplier,
+        BuildPhaseDuration
     }
 
     public class ZombiesPlayer
@@ -669,5 +732,12 @@ namespace Zombies
         public float FallDamageMultiplier { get; set; } = 1f;
         public float RunningSpeedMultiplier { get; set; } = 1f;
         public float JumpHeightMultiplier { get; set; } = 1f;
+        public int BuildPhaseDuration { get; set; } = 0;
+    }
+
+    public class ZombiesState : ModuleConfiguration
+    {
+        public bool BuildPhase { get; set; } = false;
+        public DateTime EndOfBuildPhase { get; set; } = DateTime.MinValue;
     }
 }
