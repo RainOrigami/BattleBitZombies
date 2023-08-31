@@ -74,6 +74,7 @@ namespace Zombies
                 {
                     this.players.Add(player.SteamID, new ZombiesPlayer(player));
                 }
+                player.Modifications.IsExposedOnMap = false;
                 this.getPlayer(player).IsZombie = player.Team == ZOMBIES;
                 player.Modifications.CaptureFlagSpeedMultiplier = 0.5f;
             }
@@ -119,9 +120,9 @@ namespace Zombies
         {
             while (this.IsLoaded && this.Server.IsConnected)
             {
-                foreach (RunnerPlayer player in this.Server.AllPlayers.Where(p => !this.getPlayer(p).IsZombie))
+                foreach (RunnerPlayer player in this.Server.AllPlayers)
                 {
-                    player.Modifications.IsExposedOnMap = true;
+                    player.Modifications.IsExposedOnMap = !this.getPlayer(player).IsZombie;
                 }
 
                 await Task.Delay(3000);
@@ -130,6 +131,7 @@ namespace Zombies
                 {
                     return;
                 }
+
                 foreach (RunnerPlayer player in this.Server.AllPlayers.Where(p => !this.getPlayer(p).IsZombie))
                 {
                     player.Modifications.IsExposedOnMap = false;
@@ -170,6 +172,13 @@ namespace Zombies
                     break;
                 case GameState.CountingDown:
                     this.Server.RoundSettings.SecondsLeft = 10;
+
+                    foreach (RunnerPlayer player in this.Server.AllPlayers)
+                    {
+                        player.Modifications.CanDeploy = true;
+                        player.Modifications.CanSuicide = false;
+                        player.Modifications.CanSpectate = false;
+                    }
                     break;
                 case GameState.Playing:
                     safetyEnding = false;
