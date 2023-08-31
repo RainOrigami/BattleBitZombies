@@ -116,6 +116,20 @@ namespace Zombies
             }
         }
 
+        public override Task OnSquadPointsChanged(Squad<RunnerPlayer> squad, int newPoints)
+        {
+            if (squad.Team == HUMANS)
+            {
+                squad.SquadPoints = 1000;
+            }
+            else
+            {
+                squad.SquadPoints = 0;
+            }
+
+            return Task.CompletedTask;
+        }
+
         private async Task humanExposer()
         {
             while (this.IsLoaded && this.Server.IsConnected)
