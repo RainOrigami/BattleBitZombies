@@ -1044,7 +1044,7 @@ namespace Zombies
             player.Modifications.JumpHeightMultiplier = this.Configuration.ZombieJumpHeightMultiplier;
             player.Modifications.MinimumDamageToStartBleeding = 100f;
             player.Modifications.MinimumHpToStartBleeding = 0;
-            player.Modifications.ReceiveDamageMultiplier = 1f;
+            player.Modifications.ReceiveDamageMultiplier = this.Configuration.ZombieDamageReceived;
             player.Modifications.ReloadSpeedMultiplier = 1f;
             player.Modifications.ReviveHP = 0;
             player.Modifications.RunningSpeedMultiplier = this.Configuration.ZombieRunningSpeedMultiplier;
@@ -1422,15 +1422,10 @@ namespace Zombies
         public int InitialZombieMaxPercentage { get; set; } = 15;
         public int AnnounceLastHumansCount { get; set; } = 10;
         public int RequiredPlayersToStart { get; set; } = 20;
-        public float ZombieMinDamageReceived { get; set; } = 0.2f;
-        public float ZombieMaxDamageReceived { get; set; } = 2f;
-        public float SuicideZombieficationChance { get; set; } = 0.3141f;
-        public int SuicideZombieficationMaxTime { get; set; } = 120000;
-        public float FallDamageMultiplier { get; set; } = 1f;
+        public float ZombieDamageReceived { get; set; } = 2f;
         public float ZombieRunningSpeedMultiplier { get; set; } = 1f;
         public float ZombieJumpHeightMultiplier { get; set; } = 1f;
-        public int BuildPhaseDuration { get; set; } = 0;
-        public int PistolThreshold { get; set; } = 255;
+        public int BuildPhaseDuration { get; set; } = 120;
         public int GameStateUpdateTimer { get; set; } = 250;
         public int BuildPhaseSquadPoints { get; set; } = 500;
         public int GamePhaseSquadPoints { get; set; } = 0;
