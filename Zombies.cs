@@ -1268,52 +1268,6 @@ public class Zombies : BattleBitModule
     }
 
     // Moderator/admin commands
-
-    //[CommandCallback("set", Description = "Set a specific balancing value.", AllowedRoles = Roles.Admin)]
-    //public void SetCommand(RunnerPlayer player, BalanceVariable name, float value)
-    //{
-    //    switch (name)
-    //    {
-    //        case BalanceVariable.InitialZombieCount:
-    //            this.Configuration.InitialZombieCount = (int)value;
-    //            break;
-    //        case BalanceVariable.AnnounceLastHumansCount:
-    //            this.Configuration.AnnounceLastHumansCount = (int)value;
-    //            break;
-    //        case BalanceVariable.RequiredPlayersToStart:
-    //            this.Configuration.RequiredPlayersToStart = (int)value;
-    //            break;
-    //        case BalanceVariable.ZombieMinDamageReceived:
-    //            this.Configuration.ZombieMinDamageReceived = value;
-    //            break;
-    //        case BalanceVariable.ZombieMaxDamageReceived:
-    //            this.Configuration.ZombieMaxDamageReceived = value;
-    //            break;
-    //        case BalanceVariable.SuicideZombieficationChance:
-    //            this.Configuration.SuicideZombieficationChance = value;
-    //            break;
-    //        case BalanceVariable.SuicideZombieficationMaxTime:
-    //            this.Configuration.SuicideZombieficationMaxTime = (int)value;
-    //            break;
-    //        case BalanceVariable.FallDamageMultiplier:
-    //            this.Configuration.FallDamageMultiplier = value;
-    //            break;
-    //        case BalanceVariable.RunningSpeedMultiplier:
-    //            this.Configuration.ZombieRunningSpeedMultiplier = value;
-    //            break;
-    //        case BalanceVariable.JumpHeightMultiplier:
-    //            this.Configuration.ZombieJumpHeightMultiplier = value;
-    //            break;
-    //        case BalanceVariable.BuildPhaseDuration:
-    //            this.Configuration.BuildPhaseDuration = (int)value;
-    //            break;
-    //        default:
-    //            break;
-    //    }
-
-    //    this.Configuration.Save();
-    //}
-
     [CommandCallback("switch", Description = "Switch a player to the other team.", AllowedRoles = Roles.Moderator)]
     public async void SwitchCommand(RunnerPlayer source, RunnerPlayer target)
     {
@@ -1368,21 +1322,6 @@ public class Zombies : BattleBitModule
 }
 
 #region CLASSES AND ENUMS
-public enum BalanceVariable
-{
-    InitialZombieCount,
-    AnnounceLastHumansCount,
-    RequiredPlayersToStart,
-    ZombieMinDamageReceived,
-    ZombieMaxDamageReceived,
-    SuicideZombieficationChance,
-    SuicideZombieficationMaxTime,
-    FallDamageMultiplier,
-    RunningSpeedMultiplier,
-    JumpHeightMultiplier,
-    BuildPhaseDuration
-}
-
 public class ZombiesPlayer
 {
     public RunnerPlayer Player { get; set; }
