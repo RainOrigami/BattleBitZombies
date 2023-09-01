@@ -1012,12 +1012,12 @@ public class Zombies : BattleBitModule
         // - Zombies may have classes that change these rules
         // - Zombies can only spawn on points and squad mates
 
-        if (player.CurrentLoadout.PrimaryWeapon.Tool is not null)
+        if (player.CurrentLoadout.PrimaryWeapon.ToolName is not null)
         {
             player.SetPrimaryWeapon(emptyWeapon, 0);
         }
 
-        if (player.CurrentLoadout.SecondaryWeapon.Tool is not null)
+        if (player.CurrentLoadout.SecondaryWeapon.ToolName is not null)
         {
             player.SetSecondaryWeapon(emptyWeapon, 0);
         }
