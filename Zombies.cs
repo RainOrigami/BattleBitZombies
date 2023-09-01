@@ -1,5 +1,4 @@
-﻿using BattleBitAPI;
-using BattleBitAPI.Common;
+﻿using BattleBitAPI.Common;
 using BattleBitAPI.Server;
 using BattleBitBaseModules;
 using BBRAPIModules;
@@ -7,10 +6,7 @@ using Commands;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.IO;
 using System.Linq;
-using System.Numerics;
-using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -73,6 +69,36 @@ namespace Zombies
                 p.SetHeavyGadget(Gadgets.RiotShield.Name, 1);
             }),
         };
+
+        private static readonly string[] allowedZombieMeleeGadgets = new[]
+        {
+            Gadgets.SledgeHammer.Name,
+            Gadgets.SledgeHammerSkinA.Name,
+            Gadgets.SledgeHammerSkinB.Name,
+            Gadgets.SledgeHammerSkinC.Name,
+            Gadgets.Pickaxe.Name,
+            Gadgets.PickaxeIronPickaxe.Name
+        };
+
+        private static readonly string[] allowedZombieThrowables = new[]
+        {
+            Gadgets.SmokeGrenadeBlue.Name,
+            Gadgets.SmokeGrenadeGreen.Name,
+            Gadgets.SmokeGrenadeRed.Name,
+            Gadgets.SmokeGrenadeWhite.Name
+        };
+
+        private static readonly WeaponItem emptyWeapon = new()
+        {
+            Barrel = null,
+            BoltAction = null,
+            CantedSight = null,
+            MainSight = null,
+            SideRail = null,
+            Tool = null,
+            TopSight = null,
+            UnderRail = null
+        };
         #endregion
 
         #region CONFIGURATION
@@ -105,6 +131,7 @@ namespace Zombies
         }
         #endregion
 
+        #region GAME STATE MANAGEMENT
         private async Task gameStateManagerWorker()
         {
             Stopwatch stopwatch = new Stopwatch();
@@ -260,7 +287,11 @@ namespace Zombies
                     break;
             }
         }
+        #endregion
 
+        #region GAME STATE HANDLERS
+        #region GAME STATE CHANGED HANDLERS
+        #region WAITING FOR PLAYERS
         private async Task waitingForPlayersGameState()
         {
             this.Server.RoundSettings.PlayersToStart = this.Configuration.RequiredPlayersToStart;
@@ -270,21 +301,9 @@ namespace Zombies
                 await this.applyWaitingForPlayersRuleSetToPlayer(player);
             }
         }
+        #endregion
 
-        private async Task applyWaitingForPlayersRuleSetToPlayer(RunnerPlayer player)
-        {
-            // Ruleset for waiting for players:
-            // - All players are human
-            // - All players can not deploy
-            // - All players are frozen
-
-            player.ChangeTeam(HUMANS);
-            player.Modifications.CanDeploy = false;
-            player.Modifications.Freeze = true;
-
-            await Task.CompletedTask;
-        }
-
+        #region COUNTDOWN
         private async Task countdownGameState()
         {
             //RunnerPlayer[] initialZombies = await initialZombiePopulation();
@@ -302,47 +321,9 @@ namespace Zombies
 
             await Task.CompletedTask;
         }
+        #endregion
 
-        private void applyCountdownRuleSetToPlayer(RunnerPlayer player)
-        {
-            // Ruleset for countdown:
-            // - Humans can deploy
-            // - Humans are unfrozen
-
-            if (player.Team == HUMANS)
-            {
-                player.Modifications.CanDeploy = true;
-                player.Modifications.Freeze = false;
-            }
-        }
-
-        private Task<RunnerPlayer[]> initialZombiePopulation()
-        {
-            List<RunnerPlayer> zombies = new();
-
-            // Initial zombies selection
-            List<RunnerPlayer> players = this.Server.AllPlayers.Where(p => p.Team == HUMANS).ToList();
-            int initialZombieCount = this.Configuration.InitialZombieCount;
-
-            // If initial zombie count is greater than initial zombie maximum percentage, set it to the maximum percentage
-            int maxAmountOfZombies = (int)(players.Count * (this.Configuration.InitialZombieMaxPercentage / 100.0));
-            if (initialZombieCount > maxAmountOfZombies)
-            {
-                initialZombieCount = maxAmountOfZombies;
-            }
-
-            for (int i = 0; i < initialZombieCount; i++)
-            {
-                // TODO: maybe add ability for players to pick a preference of being a zombie or human
-                int randomIndex = Random.Shared.Next(players.Count);
-                RunnerPlayer player = players[randomIndex];
-                players.RemoveAt(randomIndex);
-                zombies.Add(player);
-            }
-
-            return Task.FromResult(zombies.ToArray());
-        }
-
+        #region BUILD PHASE
         private async Task buildPhaseGameState()
         {
             // Ruleset for build phase:
@@ -403,105 +384,26 @@ namespace Zombies
                 this.Server.AnnounceShort($"Zombies will arrive in {this.State.EndOfBuildPhase.Subtract(DateTime.Now).TotalSeconds:0} seconds!");
             }
         }
+        #endregion
 
-        private async Task applyBuildPhaseRuleSetToPlayer(RunnerPlayer player)
-        {
-            // Ruleset for build phase:
-            // - Humans can deploy
-            // - Humans are unfrozen
-            // - Zombies can not deploy
-            // - Zombies are frozen
-            // - All humans must be in a squad
-
-            if (player.Team == HUMANS)
-            {
-                await this.applyHumanRuleSetToPlayer(player);
-
-                player.Modifications.CanDeploy = true;
-                player.Modifications.Freeze = false;
-
-                if (player.Squad.Name == Squads.NoSquad)
-                {
-                    Squad<RunnerPlayer> targetSquad = await this.findFirstNonEmptySquad(player.Team);
-                    player.JoinSquad(targetSquad.Name);
-                }
-            }
-            else if (player.Team == ZOMBIES)
-            {
-                await this.applyZombieRuleSetToPlayer(player);
-
-                player.Modifications.CanDeploy = false;
-                player.Modifications.Freeze = true;
-            }
-        }
-
-        public override async Task OnSquadPointsChanged(Squad<RunnerPlayer> squad, int newPoints)
-        {
-            // Ruleset for squad point changes:
-            // - Zombies can never have squad points
-            // - Humans can not make squad points by capturing/killing
-
-            if (squad.Team == ZOMBIES)
-            {
-                squad.SquadPoints = 0;
-                return;
-            }
-
-            if (this.getLastHumanSquadPoints(squad.Name) < newPoints)
-            {
-                squad.SquadPoints = this.getLastHumanSquadPoints(squad.Name);
-                return;
-            }
-
-            this.setLastHumanSquadPoints(squad.Name, newPoints);
-
-            await Task.CompletedTask;
-        }
-
-        private int getLastHumanSquadPoints(Squads humanSquad)
-        {
-            if (!this.State.LastSquadPoints.ContainsKey(humanSquad))
-            {
-                this.State.LastSquadPoints.Add(humanSquad, 0);
-            }
-
-            return this.State.LastSquadPoints[humanSquad];
-        }
-
-        private void setLastHumanSquadPoints(Squads humanSquad, int points)
-        {
-            if (!this.State.LastSquadPoints.ContainsKey(humanSquad))
-            {
-                this.State.LastSquadPoints.Add(humanSquad, 0);
-            }
-
-            this.State.LastSquadPoints[humanSquad] = points;
-        }
-
-        private Task<Squad<RunnerPlayer>> findFirstNonEmptySquad(Team team)
-        {
-            foreach (Squad<RunnerPlayer> squad in this.Server.AllSquads.Where(s => s.Team == team))
-            {
-                if (squad.NumberOfMembers < 8)
-                {
-                    return Task.FromResult(squad);
-                }
-            }
-
-            // No free squads available, this is impossible (8 players * 64 squads = 512 players which is more than the max player count of 254)
-            throw new Exception("No free squads available");
-        }
-
+        #region GAME PHASE
         private async Task gamePhaseGameState()
         {
             // Ruleset for game phase:
             // - All human squads will have their squad points set to GamePhaseSquadPoints
             // - Squads can not make squad points by capturing/killing
+            // - Human squad points are set to GamePhaseSquadPoints
             // - Zombies can deploy
             // - Zombies are unfrozen
             // - A random population of humans will turn into zombies in the midst of the humans at a random time interval between 0 and ZombieMaxInfectionTime ms
 
             this.Server.RoundSettings.SecondsLeft = this.Configuration.GamePhaseDuration;
+
+            foreach (Squad<RunnerPlayer> squad in this.Server.AllSquads.Where(s => s.Team == HUMANS))
+            {
+                squad.SquadPoints = this.Configuration.GamePhaseSquadPoints;
+                this.setLastHumanSquadPoints(squad.Name, squad.SquadPoints);
+            }
 
             this.Server.AnnounceShort($"The infection is starting!");
 
@@ -516,173 +418,9 @@ namespace Zombies
                 });
             }
         }
+        #endregion
 
-        private async Task makePlayerZombie(RunnerPlayer player)
-        {
-            if (player.Team == ZOMBIES)
-            {
-                return;
-            }
-
-            player.ChangeTeam(ZOMBIES);
-            await this.applyZombieRuleSetToPlayer(player);
-            player.Message($"You have been turned into a {RichText?.FromColorName("red")}ZOMBIE{RichText?.FromColorName("white")}.", 10);
-
-            await Task.CompletedTask;
-        }
-
-        private async Task applyHumanRuleSetToPlayer(RunnerPlayer player)
-        {
-            // Ruleset for humans:
-            // - Humans are all default
-            // - Humans can not suicide
-            // - Humans can not use vehicles
-            // - Humans can not use NVGs
-            // - Humans do not see friendly HUD indicators
-            // - Humans do not have hitmarkers
-            // - Humans can not heal using bandages
-            // - Humans can not revive
-            // - Humans can spawn anywhere except vehicles
-
-            player.Modifications.AirStrafe = true;
-            player.Modifications.AllowedVehicles = VehicleType.None;
-            player.Modifications.CanUseNightVision = false;
-            player.Modifications.FallDamageMultiplier = 1f;
-            player.Modifications.FriendlyHUDEnabled = false;
-            player.Modifications.GiveDamageMultiplier = 1f;
-            player.Modifications.HitMarkersEnabled = false;
-            player.Modifications.HpPerBandage = 0f;
-            player.Modifications.JumpHeightMultiplier = 1f;
-            Console.ForegroundColor = ConsoleColor.Green;
-            Console.WriteLine($"Initial MinimumDamageToStartBleeding is {player.Modifications.MinimumDamageToStartBleeding}");
-            Console.ResetColor();
-            player.Modifications.MinimumDamageToStartBleeding = 30f; // TODO: get initial value
-            Console.ForegroundColor = ConsoleColor.Green;
-            Console.WriteLine($"Initial MinimumHpToStartBleeding is {player.Modifications.MinimumHpToStartBleeding}");
-            Console.ResetColor();
-            player.Modifications.MinimumHpToStartBleeding = 30f; // TODO: get initial value
-            player.Modifications.ReceiveDamageMultiplier = 1f;
-            player.Modifications.ReloadSpeedMultiplier = 1f;
-            player.Modifications.ReviveHP = 0;
-            player.Modifications.RunningSpeedMultiplier = 1f;
-            player.Modifications.SpawningRule = HUMANS_SPAWN_RULE;
-
-            player.Modifications.CanDeploy = true;
-            player.Modifications.Freeze = false;
-
-            await Task.CompletedTask;
-        }
-
-        private async Task applyZombieRuleSetToPlayer(RunnerPlayer player)
-        {
-            // Ruleset for zombies:
-            // - Zombies can not have a primary weapon
-            // - Zombies can not have a secondary weapon
-            // - Zombies can not have a gadget
-            // - Zombies must have a melee weapon
-            // - Zombies can only have smoke grenades
-            // - Zombies can not have bandages
-            // - Zombies can not revive or heal
-            // - Zombies do not bleed
-            // - Zombies are faster
-            // - Zombies jump higher
-            // - Zombies can suicide
-            // - Zombies can not use vehicles
-            // - Zombies can use NVGs
-            // - Zombies have adjusted incoming damage
-            // - Zombies can see friendly HUD indicators
-            // - Zombies have hitmarkers
-            // - Zombies may have classes that change these rules
-            // - Zombies can only spawn on points and squad mates
-
-            if (player.CurrentLoadout.PrimaryWeapon.Tool is not null)
-            {
-                player.SetPrimaryWeapon(emptyWeapon, 0);
-            }
-
-            if (player.CurrentLoadout.SecondaryWeapon.Tool is not null)
-            {
-                player.SetSecondaryWeapon(emptyWeapon, 0);
-            }
-
-            if (!allowedZombieMeleeGadgets.Contains(player.CurrentLoadout.HeavyGadgetName))
-            {
-                player.SetHeavyGadget(Gadgets.SledgeHammer.Name, 0);
-            }
-
-            if (!allowedZombieMeleeGadgets.Contains(player.CurrentLoadout.LightGadgetName))
-            {
-                player.SetLightGadget(Gadgets.Pickaxe.Name, 0);
-            }
-
-            if (!allowedZombieThrowables.Contains(player.CurrentLoadout.ThrowableName))
-            {
-                player.SetThrowable(Gadgets.SmokeGrenadeBlue.Name, 10);
-            }
-
-            player.SetFirstAidGadget(Gadgets.Bandage.Name, 0);
-
-            player.Modifications.AirStrafe = true;
-            player.Modifications.AllowedVehicles = VehicleType.None;
-            player.Modifications.CanUseNightVision = true;
-            player.Modifications.FallDamageMultiplier = 0f;
-            player.Modifications.FriendlyHUDEnabled = true;
-            player.Modifications.GiveDamageMultiplier = 1f;
-            player.Modifications.HitMarkersEnabled = true;
-            player.Modifications.HpPerBandage = 0f;
-            player.Modifications.JumpHeightMultiplier = this.Configuration.ZombieJumpHeightMultiplier;
-            player.Modifications.MinimumDamageToStartBleeding = 100f;
-            player.Modifications.MinimumHpToStartBleeding = 0;
-            player.Modifications.ReceiveDamageMultiplier = 1f;
-            player.Modifications.ReloadSpeedMultiplier = 1f;
-            player.Modifications.ReviveHP = 0;
-            player.Modifications.RunningSpeedMultiplier = this.Configuration.ZombieRunningSpeedMultiplier;
-            player.Modifications.SpawningRule = ZOMBIES_SPAWN_RULE;
-
-            if (this.State.GameState == ZombiesGameState.GamePhase)
-            {
-                player.Modifications.CanDeploy = true;
-                player.Modifications.Freeze = false;
-            }
-            else
-            {
-                player.Modifications.CanDeploy = false;
-                player.Modifications.Freeze = true;
-            }
-
-            await Task.CompletedTask;
-        }
-
-        private static readonly string[] allowedZombieMeleeGadgets = new[]
-        {
-            Gadgets.SledgeHammer.Name,
-            Gadgets.SledgeHammerSkinA.Name,
-            Gadgets.SledgeHammerSkinB.Name,
-            Gadgets.SledgeHammerSkinC.Name,
-            Gadgets.Pickaxe.Name,
-            Gadgets.PickaxeIronPickaxe.Name
-        };
-
-        private static readonly string[] allowedZombieThrowables = new[]
-        {
-            Gadgets.SmokeGrenadeBlue.Name,
-            Gadgets.SmokeGrenadeGreen.Name,
-            Gadgets.SmokeGrenadeRed.Name,
-            Gadgets.SmokeGrenadeWhite.Name
-        };
-
-        private static readonly WeaponItem emptyWeapon = new()
-        {
-            Barrel = null,
-            BoltAction = null,
-            CantedSight = null,
-            MainSight = null,
-            SideRail = null,
-            Tool = null,
-            TopSight = null,
-            UnderRail = null
-        };
-
+        #region END OF GAME
         private async Task zombieWinGameState()
         {
             this.Server.AnnounceShort($"{RichText?.FromColorName("red")}ZOMBIES WIN");
@@ -700,8 +438,6 @@ namespace Zombies
 
             await Task.CompletedTask;
         }
-
-        private int actualHumanCount => this.Server.AllPlayers.Count(player => player.Team == HUMANS && !player.IsDown && player.IsAlive);
 
         private bool isZombieWin()
         {
@@ -722,8 +458,11 @@ namespace Zombies
 
             return false;
         }
+        #endregion
 
+        #endregion
 
+        #region GAME STATE TICK HANDLERS
         private void endedGameStateTick()
         {
         }
@@ -759,188 +498,15 @@ namespace Zombies
         private void waitingForPlayersGameStateTick()
         {
         }
+        #endregion
+        #endregion
 
-        private void zombieLoadoutHandler()
-        {
-            // Ruleset:
-            // - Maximum of ZombieClassRatio % of zombies can have a class
-            // - If there are more zombies than the ratio, the rest will be normal zombies
-            // - Classes are limited by amount of zombies with that class
-
-            ZombiesPlayer[] classedZombies = this.Server.AllPlayers.Where(p => p.Team == ZOMBIES && !p.IsDown && p.IsAlive).Select(p => this.getPlayer(p)).Where(p => p.ZombieClass is not null).ToArray();
-            ZombieClass[] availableClasses = zombieClasses.Where(c => classedZombies.Count(z => z.ZombieClass == c) < c.RequestedAmount).ToArray();
-
-            if (availableClasses.Length == 0)
-            {
-                return;
-            }
-
-            double classedZombiesRatio = (double)classedZombies.Length / this.Server.AllPlayers.Count(player => player.Team == ZOMBIES);
-            if (classedZombiesRatio >= this.Configuration.ZombieClassRatio)
-            {
-                return;
-            }
-
-            ZombiesPlayer[] classCandidates = this.Server.AllPlayers.Where(p => p.Team == ZOMBIES && !p.IsDown && p.IsAlive).Select(p => this.getPlayer(p)).Where(p => p.ZombieClass is null).ToArray();
-            if (classCandidates.Length == 0)
-            {
-                return;
-            }
-
-            ZombiesPlayer candidate = classCandidates[Random.Shared.Next(classCandidates.Length)];
-            ZombieClass zombieClass = availableClasses[Random.Shared.Next(availableClasses.Length)];
-
-            zombieClass.ApplyToPlayer(candidate.Player);
-            candidate.Player.Message($"{this.RichText?.Size(120)}{this.RichText?.FromColorName("yellow")}YOU HAVE MUTATED!{this.RichText?.NewLine() ?? " "}{this.RichText?.Size(100)}{this.RichText?.Color()}You are a {this.RichText?.FromColorName("red")}{zombieClass.Name} {this.RichText?.Color()}zombie now! Go fuck shit up!", 15);
-        }
-
-        private void humanLoadoutHandler()
-        {
-            foreach (RunnerPlayer player in this.Server.AllPlayers.Where(p => p.Team == HUMANS))
-            {
-                ZombiesPlayer human = this.getPlayer(player);
-                if (!human.ReceivedPrimary || !human.ReceivedHeavyGadget || !human.ReceivedLightGadget || !human.ReceivedThrowable)
-                {
-                    this.applyHumanLoadoutToPlayer(player);
-                }
-            }
-        }
-
-        private void applyHumanLoadoutToPlayer(RunnerPlayer player)
-        {
-            double humanRatio = this.actualHumanCount / this.Server.AllPlayers.Count();
-            ZombiesPlayer human = this.getPlayer(player);
-            if (human.InitialLoadout == null)
-            {
-                human.InitialLoadout = new()
-                {
-                    HeavyGadget = Gadgets.GrapplingHook,
-                    HeavyGadgetExtra = 1,
-                    LightGadget = Gadgets.SmallAmmoKit,
-                    LightGadgetExtra = 1,
-                    PrimaryWeapon = new WeaponItem()
-                    {
-                        Barrel = Attachments.Compensator,
-                        BoltAction = null,
-                        CantedSight = null,
-                        MainSight = Attachments.RedDot,
-                        SideRail = this.Server.DayNight == MapDayNight.Night ? new Attachment(HUMAN_FLASHLIGHTS[Random.Shared.Next(HUMAN_FLASHLIGHTS.Length)], AttachmentType.SideRail) : Attachments.Redlaser,
-                        Tool = Weapons.M4A1,
-                        TopSight = null,
-                        UnderRail = Attachments.VerticalGrip
-                    },
-                    PrimaryExtraMagazines = 4,
-                    Throwable = Gadgets.ImpactGrenade
-                };
-            }
-
-            if (humanRatio <= this.Configuration.HumanRatioThrowable && !human.ReceivedThrowable)
-            {
-                player.SayToChat($"{this.RichText?.FromColorName("green")}You received your throwable!");
-                player.SetThrowable(human.InitialLoadout.Value.ThrowableName, human.InitialLoadout.Value.ThrowableExtra);
-                human.ReceivedThrowable = true;
-            }
-
-            if (humanRatio <= this.Configuration.HumanRatioLightGadget && !human.ReceivedLightGadget)
-            {
-                player.SayToChat($"{this.RichText?.FromColorName("green")}You received your light gadget!");
-                player.SetLightGadget(human.InitialLoadout.Value.LightGadgetName, human.InitialLoadout.Value.LightGadgetExtra);
-                human.ReceivedLightGadget = true;
-            }
-
-            if (humanRatio <= this.Configuration.HumanRatioHeavyGadget && !human.ReceivedHeavyGadget)
-            {
-                player.SayToChat($"{this.RichText?.FromColorName("green")}You received your heavy gadget!");
-                player.SetHeavyGadget(human.InitialLoadout.Value.HeavyGadgetName, human.InitialLoadout.Value.HeavyGadgetExtra);
-                human.ReceivedHeavyGadget = true;
-            }
-
-            if (humanRatio <= this.Configuration.HumanRatioPrimary && !human.ReceivedPrimary)
-            {
-                player.SayToChat($"{this.RichText?.FromColorName("green")}You received your primary weapon!");
-                player.SetPrimaryWeapon(human.InitialLoadout.Value.PrimaryWeapon, human.InitialLoadout.Value.PrimaryExtraMagazines);
-                human.ReceivedPrimary = true;
-            }
-        }
-
-        private void announceHumanCount()
-        {
-            int humanCount = this.actualHumanCount;
-
-            if (this.State.LastHumansAnnounced > humanCount)
-            {
-                if (humanCount <= this.Configuration.AnnounceLastHumansCount)
-                {
-                    if (humanCount == 1)
-                    {
-                        RunnerPlayer? lastHuman = this.Server.AllPlayers.FirstOrDefault(p => p.Team == HUMANS && !p.IsDown && p.IsAlive);
-                        if (lastHuman != null)
-                        {
-                            this.Server.AnnounceShort($"<b>{lastHuman.Name}<b> is the LAST HUMAN, {this.RichText?.FromColorName("red")}KILL IT!");
-                            this.Server.SayToAllChat($"<b>{lastHuman.Name}<b> is the LAST HUMAN, {this.RichText?.FromColorName("red")}KILL IT!");
-                        }
-                        else
-                        {
-                            Console.ForegroundColor = ConsoleColor.Red;
-                            Console.WriteLine("No last human found");
-                            Console.ResetColor();
-
-                            this.Server.AnnounceShort($"LAST HUMAN, {this.RichText?.FromColorName("red")}KILL IT!");
-                            this.Server.SayToAllChat($"{this.RichText?.Size(110)}LAST HUMAN, {this.RichText?.FromColorName("red")}KILL IT!");
-                        }
-                    }
-                    else
-                    {
-                        this.Server.SayToAllChat($"{humanCount} HUMANS LEFT, {this.RichText?.FromColorName("red")}KILL THEM!");
-                    }
-                }
-            }
-
-            this.Configuration.AnnounceLastHumansCount = humanCount;
-        }
-
-        private void exposeHumansOnMap()
-        {
-            if (DateTime.Now >= this.State.NextHumanExposeSwitch)
-            {
-                if (this.State.ExposeOnMap)
-                {
-                    this.State.NextHumanExposeSwitch = DateTime.Now.AddSeconds(this.Configuration.HumanExposeOffTime);
-                    this.State.ExposeOnMap = false;
-                }
-                else
-                {
-                    this.State.NextHumanExposeSwitch = DateTime.Now.AddSeconds(this.Configuration.HumanExposeOnTime);
-                    this.State.ExposeOnMap = true;
-                }
-
-                foreach (RunnerPlayer player in this.Server.AllPlayers)
-                {
-                    if (player.Team == ZOMBIES)
-                    {
-                        player.Modifications.IsExposedOnMap = false;
-                        continue;
-                    }
-
-                    player.Modifications.IsExposedOnMap = this.State.ExposeOnMap;
-                }
-            }
-        }
+        #region SERVER CALLBACKS
 
         public override void OnModulesLoaded()
         {
             this.CommandHandler.Register(this);
         }
-
-        private async Task applyServerSettings()
-        {
-            this.Server.SetServerSizeForNextMatch(MapSize._64vs64);
-            this.Server.GamemodeRotation.SetRotation("FRONTLINE");
-            this.Server.ServerSettings.UnlockAllAttachments = true;
-
-            await Task.CompletedTask;
-        }
-
         public override async Task OnConnected()
         {
             _ = Task.Run(gameStateManagerWorker);
@@ -1210,6 +776,475 @@ namespace Zombies
 
             return Task.CompletedTask;
         }
+        public override async Task OnSquadPointsChanged(Squad<RunnerPlayer> squad, int newPoints)
+        {
+            // Ruleset for squad point changes:
+            // - Zombies can never have squad points
+            // - Humans can not make squad points by capturing/killing
+
+            if (squad.Team == ZOMBIES)
+            {
+                squad.SquadPoints = 0;
+                return;
+            }
+
+            if (this.getLastHumanSquadPoints(squad.Name) < newPoints)
+            {
+                squad.SquadPoints = this.getLastHumanSquadPoints(squad.Name);
+                return;
+            }
+
+            this.setLastHumanSquadPoints(squad.Name, newPoints);
+
+            await Task.CompletedTask;
+        }
+        #endregion
+
+        #region HELPER METHODS
+        private int actualHumanCount => this.Server.AllPlayers.Count(player => player.Team == HUMANS && !player.IsDown && player.IsAlive);
+
+        private Task<RunnerPlayer[]> initialZombiePopulation()
+        {
+            List<RunnerPlayer> zombies = new();
+
+            // Initial zombies selection
+            List<RunnerPlayer> players = this.Server.AllPlayers.Where(p => p.Team == HUMANS).ToList();
+            int initialZombieCount = this.Configuration.InitialZombieCount;
+
+            // If initial zombie count is greater than initial zombie maximum percentage, set it to the maximum percentage
+            int maxAmountOfZombies = (int)(players.Count * (this.Configuration.InitialZombieMaxPercentage / 100.0));
+            if (initialZombieCount > maxAmountOfZombies)
+            {
+                initialZombieCount = maxAmountOfZombies;
+            }
+
+            for (int i = 0; i < initialZombieCount; i++)
+            {
+                // TODO: maybe add ability for players to pick a preference of being a zombie or human
+                int randomIndex = Random.Shared.Next(players.Count);
+                RunnerPlayer player = players[randomIndex];
+                players.RemoveAt(randomIndex);
+                zombies.Add(player);
+            }
+
+            return Task.FromResult(zombies.ToArray());
+        }
+
+        private int getLastHumanSquadPoints(Squads humanSquad)
+        {
+            if (!this.State.LastSquadPoints.ContainsKey(humanSquad))
+            {
+                this.State.LastSquadPoints.Add(humanSquad, 0);
+            }
+
+            return this.State.LastSquadPoints[humanSquad];
+        }
+
+        private void setLastHumanSquadPoints(Squads humanSquad, int points)
+        {
+            if (!this.State.LastSquadPoints.ContainsKey(humanSquad))
+            {
+                this.State.LastSquadPoints.Add(humanSquad, 0);
+            }
+
+            this.State.LastSquadPoints[humanSquad] = points;
+        }
+
+        private Task<Squad<RunnerPlayer>> findFirstNonEmptySquad(Team team)
+        {
+            foreach (Squad<RunnerPlayer> squad in this.Server.AllSquads.Where(s => s.Team == team))
+            {
+                if (squad.NumberOfMembers < 8)
+                {
+                    return Task.FromResult(squad);
+                }
+            }
+
+            // No free squads available, this is impossible (8 players * 64 squads = 512 players which is more than the max player count of 254)
+            throw new Exception("No free squads available");
+        }
+
+        private async Task makePlayerZombie(RunnerPlayer player)
+        {
+            if (player.Team == ZOMBIES)
+            {
+                return;
+            }
+
+            player.ChangeTeam(ZOMBIES);
+            await this.applyZombieRuleSetToPlayer(player);
+            player.Message($"You have been turned into a {RichText?.FromColorName("red")}ZOMBIE{RichText?.FromColorName("white")}.", 10);
+
+            await Task.CompletedTask;
+        }
+        #endregion
+
+        #region RULE SETS
+        #region GAME STATE RULE SETS
+        private async Task applyWaitingForPlayersRuleSetToPlayer(RunnerPlayer player)
+        {
+            // Ruleset for waiting for players:
+            // - All players are human
+            // - All players can not deploy
+            // - All players are frozen
+
+            player.ChangeTeam(HUMANS);
+            player.Modifications.CanDeploy = false;
+            player.Modifications.Freeze = true;
+
+            await Task.CompletedTask;
+        }
+
+        private void applyCountdownRuleSetToPlayer(RunnerPlayer player)
+        {
+            // Ruleset for countdown:
+            // - Humans can deploy
+            // - Humans are unfrozen
+
+            if (player.Team == HUMANS)
+            {
+                player.Modifications.CanDeploy = true;
+                player.Modifications.Freeze = false;
+            }
+        }
+
+        private async Task applyBuildPhaseRuleSetToPlayer(RunnerPlayer player)
+        {
+            // Ruleset for build phase:
+            // - Humans can deploy
+            // - Humans are unfrozen
+            // - Zombies can not deploy
+            // - Zombies are frozen
+            // - All humans must be in a squad
+
+            if (player.Team == HUMANS)
+            {
+                await this.applyHumanRuleSetToPlayer(player);
+
+                player.Modifications.CanDeploy = true;
+                player.Modifications.Freeze = false;
+
+                if (player.Squad.Name == Squads.NoSquad)
+                {
+                    Squad<RunnerPlayer> targetSquad = await this.findFirstNonEmptySquad(player.Team);
+                    player.JoinSquad(targetSquad.Name);
+                }
+            }
+            else if (player.Team == ZOMBIES)
+            {
+                await this.applyZombieRuleSetToPlayer(player);
+
+                player.Modifications.CanDeploy = false;
+                player.Modifications.Freeze = true;
+            }
+        }
+        #endregion
+
+        #region PLAYER RULE SETS
+        private async Task applyHumanRuleSetToPlayer(RunnerPlayer player)
+        {
+            // Ruleset for humans:
+            // - Humans are all default
+            // - Humans can not suicide
+            // - Humans can not use vehicles
+            // - Humans can not use NVGs
+            // - Humans do not see friendly HUD indicators
+            // - Humans do not have hitmarkers
+            // - Humans can not heal using bandages
+            // - Humans can not revive
+            // - Humans can spawn anywhere except vehicles
+
+            player.Modifications.AirStrafe = true;
+            player.Modifications.AllowedVehicles = VehicleType.None;
+            player.Modifications.CanUseNightVision = false;
+            player.Modifications.FallDamageMultiplier = 1f;
+            player.Modifications.FriendlyHUDEnabled = false;
+            player.Modifications.GiveDamageMultiplier = 1f;
+            player.Modifications.HitMarkersEnabled = false;
+            player.Modifications.HpPerBandage = 0f;
+            player.Modifications.JumpHeightMultiplier = 1f;
+            Console.ForegroundColor = ConsoleColor.Green;
+            Console.WriteLine($"Initial MinimumDamageToStartBleeding is {player.Modifications.MinimumDamageToStartBleeding}");
+            Console.ResetColor();
+            player.Modifications.MinimumDamageToStartBleeding = 30f; // TODO: get initial value
+            Console.ForegroundColor = ConsoleColor.Green;
+            Console.WriteLine($"Initial MinimumHpToStartBleeding is {player.Modifications.MinimumHpToStartBleeding}");
+            Console.ResetColor();
+            player.Modifications.MinimumHpToStartBleeding = 30f; // TODO: get initial value
+            player.Modifications.ReceiveDamageMultiplier = 1f;
+            player.Modifications.ReloadSpeedMultiplier = 1f;
+            player.Modifications.ReviveHP = 0;
+            player.Modifications.RunningSpeedMultiplier = 1f;
+            player.Modifications.SpawningRule = HUMANS_SPAWN_RULE;
+
+            player.Modifications.CanDeploy = true;
+            player.Modifications.Freeze = false;
+
+            await Task.CompletedTask;
+        }
+
+        private async Task applyZombieRuleSetToPlayer(RunnerPlayer player)
+        {
+            // Ruleset for zombies:
+            // - Zombies can not have a primary weapon
+            // - Zombies can not have a secondary weapon
+            // - Zombies can not have a gadget
+            // - Zombies must have a melee weapon
+            // - Zombies can only have smoke grenades
+            // - Zombies can not have bandages
+            // - Zombies can not revive or heal
+            // - Zombies do not bleed
+            // - Zombies are faster
+            // - Zombies jump higher
+            // - Zombies can suicide
+            // - Zombies can not use vehicles
+            // - Zombies can use NVGs
+            // - Zombies have adjusted incoming damage
+            // - Zombies can see friendly HUD indicators
+            // - Zombies have hitmarkers
+            // - Zombies may have classes that change these rules
+            // - Zombies can only spawn on points and squad mates
+
+            if (player.CurrentLoadout.PrimaryWeapon.Tool is not null)
+            {
+                player.SetPrimaryWeapon(emptyWeapon, 0);
+            }
+
+            if (player.CurrentLoadout.SecondaryWeapon.Tool is not null)
+            {
+                player.SetSecondaryWeapon(emptyWeapon, 0);
+            }
+
+            if (!allowedZombieMeleeGadgets.Contains(player.CurrentLoadout.HeavyGadgetName))
+            {
+                player.SetHeavyGadget(Gadgets.SledgeHammer.Name, 0);
+            }
+
+            if (!allowedZombieMeleeGadgets.Contains(player.CurrentLoadout.LightGadgetName))
+            {
+                player.SetLightGadget(Gadgets.Pickaxe.Name, 0);
+            }
+
+            if (!allowedZombieThrowables.Contains(player.CurrentLoadout.ThrowableName))
+            {
+                player.SetThrowable(Gadgets.SmokeGrenadeBlue.Name, 10);
+            }
+
+            player.SetFirstAidGadget(Gadgets.Bandage.Name, 0);
+
+            player.Modifications.AirStrafe = true;
+            player.Modifications.AllowedVehicles = VehicleType.None;
+            player.Modifications.CanUseNightVision = true;
+            player.Modifications.FallDamageMultiplier = 0f;
+            player.Modifications.FriendlyHUDEnabled = true;
+            player.Modifications.GiveDamageMultiplier = 1f;
+            player.Modifications.HitMarkersEnabled = true;
+            player.Modifications.HpPerBandage = 0f;
+            player.Modifications.JumpHeightMultiplier = this.Configuration.ZombieJumpHeightMultiplier;
+            player.Modifications.MinimumDamageToStartBleeding = 100f;
+            player.Modifications.MinimumHpToStartBleeding = 0;
+            player.Modifications.ReceiveDamageMultiplier = 1f;
+            player.Modifications.ReloadSpeedMultiplier = 1f;
+            player.Modifications.ReviveHP = 0;
+            player.Modifications.RunningSpeedMultiplier = this.Configuration.ZombieRunningSpeedMultiplier;
+            player.Modifications.SpawningRule = ZOMBIES_SPAWN_RULE;
+
+            if (this.State.GameState == ZombiesGameState.GamePhase)
+            {
+                player.Modifications.CanDeploy = true;
+                player.Modifications.Freeze = false;
+            }
+            else
+            {
+                player.Modifications.CanDeploy = false;
+                player.Modifications.Freeze = true;
+            }
+
+            await Task.CompletedTask;
+        }
+        #endregion
+        #endregion
+
+        #region LOADOUT HANDLERS
+        private void zombieLoadoutHandler()
+        {
+            // Ruleset:
+            // - Maximum of ZombieClassRatio % of zombies can have a class
+            // - If there are more zombies than the ratio, the rest will be normal zombies
+            // - Classes are limited by amount of zombies with that class
+
+            ZombiesPlayer[] classedZombies = this.Server.AllPlayers.Where(p => p.Team == ZOMBIES && !p.IsDown && p.IsAlive).Select(p => this.getPlayer(p)).Where(p => p.ZombieClass is not null).ToArray();
+            ZombieClass[] availableClasses = zombieClasses.Where(c => classedZombies.Count(z => z.ZombieClass == c) < c.RequestedAmount).ToArray();
+
+            if (availableClasses.Length == 0)
+            {
+                return;
+            }
+
+            double classedZombiesRatio = (double)classedZombies.Length / this.Server.AllPlayers.Count(player => player.Team == ZOMBIES);
+            if (classedZombiesRatio >= this.Configuration.ZombieClassRatio)
+            {
+                return;
+            }
+
+            ZombiesPlayer[] classCandidates = this.Server.AllPlayers.Where(p => p.Team == ZOMBIES && !p.IsDown && p.IsAlive).Select(p => this.getPlayer(p)).Where(p => p.ZombieClass is null).ToArray();
+            if (classCandidates.Length == 0)
+            {
+                return;
+            }
+
+            ZombiesPlayer candidate = classCandidates[Random.Shared.Next(classCandidates.Length)];
+            ZombieClass zombieClass = availableClasses[Random.Shared.Next(availableClasses.Length)];
+
+            zombieClass.ApplyToPlayer(candidate.Player);
+            candidate.Player.Message($"{this.RichText?.Size(120)}{this.RichText?.FromColorName("yellow")}YOU HAVE MUTATED!{this.RichText?.NewLine() ?? " "}{this.RichText?.Size(100)}{this.RichText?.Color()}You are a {this.RichText?.FromColorName("red")}{zombieClass.Name} {this.RichText?.Color()}zombie now! Go fuck shit up!", 15);
+        }
+
+        private void humanLoadoutHandler()
+        {
+            foreach (RunnerPlayer player in this.Server.AllPlayers.Where(p => p.Team == HUMANS))
+            {
+                ZombiesPlayer human = this.getPlayer(player);
+                if (!human.ReceivedPrimary || !human.ReceivedHeavyGadget || !human.ReceivedLightGadget || !human.ReceivedThrowable)
+                {
+                    this.applyHumanLoadoutToPlayer(player);
+                }
+            }
+        }
+
+        private void applyHumanLoadoutToPlayer(RunnerPlayer player)
+        {
+            double humanRatio = this.actualHumanCount / this.Server.AllPlayers.Count();
+            ZombiesPlayer human = this.getPlayer(player);
+            if (human.InitialLoadout == null)
+            {
+                human.InitialLoadout = new()
+                {
+                    HeavyGadget = Gadgets.GrapplingHook,
+                    HeavyGadgetExtra = 1,
+                    LightGadget = Gadgets.SmallAmmoKit,
+                    LightGadgetExtra = 1,
+                    PrimaryWeapon = new WeaponItem()
+                    {
+                        Barrel = Attachments.Compensator,
+                        BoltAction = null,
+                        CantedSight = null,
+                        MainSight = Attachments.RedDot,
+                        SideRail = this.Server.DayNight == MapDayNight.Night ? new Attachment(HUMAN_FLASHLIGHTS[Random.Shared.Next(HUMAN_FLASHLIGHTS.Length)], AttachmentType.SideRail) : Attachments.Redlaser,
+                        Tool = Weapons.M4A1,
+                        TopSight = null,
+                        UnderRail = Attachments.VerticalGrip
+                    },
+                    PrimaryExtraMagazines = 4,
+                    Throwable = Gadgets.ImpactGrenade
+                };
+            }
+
+            if (humanRatio <= this.Configuration.HumanRatioThrowable && !human.ReceivedThrowable)
+            {
+                player.SayToChat($"{this.RichText?.FromColorName("green")}You received your throwable!");
+                player.SetThrowable(human.InitialLoadout.Value.ThrowableName, human.InitialLoadout.Value.ThrowableExtra);
+                human.ReceivedThrowable = true;
+            }
+
+            if (humanRatio <= this.Configuration.HumanRatioLightGadget && !human.ReceivedLightGadget)
+            {
+                player.SayToChat($"{this.RichText?.FromColorName("green")}You received your light gadget!");
+                player.SetLightGadget(human.InitialLoadout.Value.LightGadgetName, human.InitialLoadout.Value.LightGadgetExtra);
+                human.ReceivedLightGadget = true;
+            }
+
+            if (humanRatio <= this.Configuration.HumanRatioHeavyGadget && !human.ReceivedHeavyGadget)
+            {
+                player.SayToChat($"{this.RichText?.FromColorName("green")}You received your heavy gadget!");
+                player.SetHeavyGadget(human.InitialLoadout.Value.HeavyGadgetName, human.InitialLoadout.Value.HeavyGadgetExtra);
+                human.ReceivedHeavyGadget = true;
+            }
+
+            if (humanRatio <= this.Configuration.HumanRatioPrimary && !human.ReceivedPrimary)
+            {
+                player.SayToChat($"{this.RichText?.FromColorName("green")}You received your primary weapon!");
+                player.SetPrimaryWeapon(human.InitialLoadout.Value.PrimaryWeapon, human.InitialLoadout.Value.PrimaryExtraMagazines);
+                human.ReceivedPrimary = true;
+            }
+        }
+        #endregion
+
+        #region ACTIONS
+        private void announceHumanCount()
+        {
+            int humanCount = this.actualHumanCount;
+
+            if (this.State.LastHumansAnnounced > humanCount)
+            {
+                if (humanCount <= this.Configuration.AnnounceLastHumansCount)
+                {
+                    if (humanCount == 1)
+                    {
+                        RunnerPlayer? lastHuman = this.Server.AllPlayers.FirstOrDefault(p => p.Team == HUMANS && !p.IsDown && p.IsAlive);
+                        if (lastHuman != null)
+                        {
+                            this.Server.AnnounceShort($"<b>{lastHuman.Name}<b> is the LAST HUMAN, {this.RichText?.FromColorName("red")}KILL IT!");
+                            this.Server.SayToAllChat($"<b>{lastHuman.Name}<b> is the LAST HUMAN, {this.RichText?.FromColorName("red")}KILL IT!");
+                        }
+                        else
+                        {
+                            Console.ForegroundColor = ConsoleColor.Red;
+                            Console.WriteLine("No last human found");
+                            Console.ResetColor();
+
+                            this.Server.AnnounceShort($"LAST HUMAN, {this.RichText?.FromColorName("red")}KILL IT!");
+                            this.Server.SayToAllChat($"{this.RichText?.Size(110)}LAST HUMAN, {this.RichText?.FromColorName("red")}KILL IT!");
+                        }
+                    }
+                    else
+                    {
+                        this.Server.SayToAllChat($"{humanCount} HUMANS LEFT, {this.RichText?.FromColorName("red")}KILL THEM!");
+                    }
+                }
+            }
+
+            this.Configuration.AnnounceLastHumansCount = humanCount;
+        }
+
+        private void exposeHumansOnMap()
+        {
+            if (DateTime.Now >= this.State.NextHumanExposeSwitch)
+            {
+                if (this.State.ExposeOnMap)
+                {
+                    this.State.NextHumanExposeSwitch = DateTime.Now.AddSeconds(this.Configuration.HumanExposeOffTime);
+                    this.State.ExposeOnMap = false;
+                }
+                else
+                {
+                    this.State.NextHumanExposeSwitch = DateTime.Now.AddSeconds(this.Configuration.HumanExposeOnTime);
+                    this.State.ExposeOnMap = true;
+                }
+
+                foreach (RunnerPlayer player in this.Server.AllPlayers)
+                {
+                    if (player.Team == ZOMBIES)
+                    {
+                        player.Modifications.IsExposedOnMap = false;
+                        continue;
+                    }
+
+                    player.Modifications.IsExposedOnMap = this.State.ExposeOnMap;
+                }
+            }
+        }
+
+
+        private async Task applyServerSettings()
+        {
+            this.Server.SetServerSizeForNextMatch(MapSize._64vs64);
+            this.Server.GamemodeRotation.SetRotation("FRONTLINE");
+            this.Server.ServerSettings.UnlockAllAttachments = true;
+
+            await Task.CompletedTask;
+        }
+        #endregion
 
         #region COMMANDS
         // Player commands
@@ -1331,6 +1366,7 @@ namespace Zombies
         #endregion
     }
 
+    #region CLASSES AND ENUMS
     public enum BalanceVariable
     {
         InitialZombieCount,
@@ -1443,4 +1479,5 @@ namespace Zombies
         HumanWin,
         Ended
     }
+    #endregion
 }
