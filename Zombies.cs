@@ -313,6 +313,8 @@ public class Zombies : BattleBitModule
         //}
 
         this.Server.RoundSettings.SecondsLeft = this.Configuration.CountdownPhaseDuration;
+        this.Server.ServerSettings.CanVoteDay = Random.Shared.Next(3) == 0;
+        this.Server.ServerSettings.CanVoteNight = true;
 
         foreach (RunnerPlayer player in this.Server.AllPlayers)
         {
