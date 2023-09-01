@@ -19,7 +19,7 @@ namespace Zombies
         private const Team HUMANS = Team.TeamA;
         private const Team ZOMBIES = Team.TeamB;
 
-        private const SpawningRule ZOMBIES_SPAWN_RULE = SpawningRule.Flags | SpawningRule.SquadCaptain;
+        private const SpawningRule ZOMBIES_SPAWN_RULE = SpawningRule.Flags | SpawningRule.SquadCaptain | SpawningRule.SquadMates;
         private const SpawningRule HUMANS_SPAWN_RULE = SpawningRule.Flags | SpawningRule.RallyPoints | SpawningRule.SquadCaptain | SpawningRule.SquadMates;
 
         private static readonly string[] HUMAN_UNIFORM = new[] { "ANY_NU_Uniform_Survivor_00", "ANY_NU_Uniform_Survivor_01", "ANY_NU_Uniform_Survivor_02", "ANY_NU_Uniform_Survivor_03", "ANY_NU_Uniform_Survivor_04" };
@@ -69,18 +69,50 @@ namespace Zombies
 
         public override async Task OnConnected()
         {
+            //this.Server.ServerSettings.CanVoteDay = true;
+            this.Server.ServerSettings.CanVoteNight = true;
+            this.Server.SetServerSizeForNextMatch(MapSize._64vs64);
             this.Server.GamemodeRotation.SetRotation("FRONTLINE");
+            //this.Server.GamemodeRotation.SetRotation("ELI");
+
             this.Server.ServerSettings.UnlockAllAttachments = true;
 
             foreach (RunnerPlayer player in this.Server.AllPlayers)
             {
-                if (!this.players.ContainsKey(player.SteamID))
+                try
                 {
-                    this.players.Add(player.SteamID, new ZombiesPlayer(player));
+                    //if (player.Squad.Name != Squads.Alpha)
+                    //{
+                    //    player.DisbandTheSquad();
+                    //    player.JoinSquad(Squads.Alpha);
+                    //}
+
+                    player.Modifications.ReviveHP = 0;
+                    if (!this.players.ContainsKey(player.SteamID))
+                    {
+                        this.players.Add(player.SteamID, new ZombiesPlayer(player));
+                    }
+                    player.Modifications.CanDeploy = true;
+                    player.Modifications.Freeze = false;
+                    if (this.getPlayer(player).IsZombie)
+                    {
+                        Console.WriteLine($"Player {player.Name} is a zombie and build phase is {this.State.BuildPhase}");
+                        player.Modifications.CanDeploy = !this.State.BuildPhase;
+                        player.Modifications.Freeze = this.State.BuildPhase;
+                    }
+                    else
+                    {
+                        player.Modifications.CanDeploy = true;
+                        player.Modifications.Freeze = false;
+                    }
+                    player.Modifications.IsExposedOnMap = false;
+                    this.getPlayer(player).IsZombie = player.Team == ZOMBIES;
+                    player.Modifications.CaptureFlagSpeedMultiplier = 0.5f;
                 }
-                player.Modifications.IsExposedOnMap = false;
-                this.getPlayer(player).IsZombie = player.Team == ZOMBIES;
-                player.Modifications.CaptureFlagSpeedMultiplier = 0.5f;
+                catch (Exception ex)
+                {
+                    Console.WriteLine(ex.ToString());
+                }
             }
 
             this.Server.RoundSettings.PlayersToStart = this.Configuration.RequiredPlayersToStart;
@@ -92,7 +124,7 @@ namespace Zombies
                 while (this.IsLoaded && this.Server.IsConnected)
                 {
                     await checkGameEnd();
-                    await Task.Delay(10000);
+                    await Task.Delay(1000);
                 }
             });
 
@@ -100,61 +132,65 @@ namespace Zombies
             //Task.Run(squadPointProvider);
         }
 
-        private async Task squadPointProvider()
-        {
-            while (this.IsLoaded && this.Server.IsConnected)
-            {
-                foreach (Squad<RunnerPlayer> squad in this.Server.AllSquads)
-                {
-                    if (squad.Team == HUMANS)
-                    {
-                        squad.SquadPoints = 1000;
-                    }
-                    else
-                    {
-                        squad.SquadPoints = 0;
-                    }
-                }
+        //private async Task squadPointProvider()
+        //{
+        //    while (this.IsLoaded && this.Server.IsConnected)
+        //    {
+        //        foreach (Squad<RunnerPlayer> squad in this.Server.AllSquads)
+        //        {
+        //            if (squad.Team == HUMANS)
+        //            {
+        //                squad.SquadPoints = 1000;
+        //            }
+        //            else
+        //            {
+        //                squad.SquadPoints = 0;
+        //            }
+        //        }
 
-                await Task.Delay(1000);
-            }
-        }
+        //        await Task.Delay(1000);
+        //    }
+        //}
 
-        public override Task OnSquadPointsChanged(Squad<RunnerPlayer> squad, int newPoints)
-        {
-            if (squad.Team == HUMANS)
-            {
-                squad.SquadPoints = 1000;
-            }
-            else
-            {
-                squad.SquadPoints = 0;
-            }
+        //public override Task OnSquadPointsChanged(Squad<RunnerPlayer> squad, int newPoints)
+        //{
+        //    if (squad.Team == HUMANS)
+        //    {
+        //        squad.SquadPoints = 1000;
+        //    }
+        //    else
+        //    {
+        //        squad.SquadPoints = 0;
+        //    }
 
-            return Task.CompletedTask;
-        }
+        //    return Task.CompletedTask;
+        //}
 
         private async Task humanExposer()
         {
             while (this.IsLoaded && this.Server.IsConnected)
             {
+
                 foreach (RunnerPlayer player in this.Server.AllPlayers)
                 {
                     player.Modifications.IsExposedOnMap = !this.getPlayer(player).IsZombie;
                 }
 
-                await Task.Delay(3000);
-
-                if (!this.IsLoaded || !this.Server.IsConnected)
+                if (this.Server.AllPlayers.Count(p => !this.getPlayer(p).IsZombie) > 10)
                 {
-                    return;
-                }
 
-                foreach (RunnerPlayer player in this.Server.AllPlayers.Where(p => !this.getPlayer(p).IsZombie))
-                {
-                    player.Modifications.IsExposedOnMap = false;
-                }
+                    await Task.Delay(3000);
 
+                    if (!this.IsLoaded || !this.Server.IsConnected)
+                    {
+                        return;
+                    }
+
+                    foreach (RunnerPlayer player in this.Server.AllPlayers.Where(p => !this.getPlayer(p).IsZombie))
+                    {
+                        player.Modifications.IsExposedOnMap = false;
+                    }
+                }
                 await Task.Delay(10000);
             }
         }
@@ -189,7 +225,7 @@ namespace Zombies
                     this.Server.RoundSettings.PlayersToStart = this.Configuration.RequiredPlayersToStart;
                     break;
                 case GameState.CountingDown:
-                    this.Server.RoundSettings.SecondsLeft = 1;
+                    this.Server.RoundSettings.SecondsLeft = 30;
 
                     foreach (RunnerPlayer player in this.Server.AllPlayers)
                     {
@@ -210,18 +246,46 @@ namespace Zombies
 
                     break;
                 case GameState.Playing:
+                    this.Server.RoundSettings.SecondsLeft = 900;
                     safetyEnding = false;
                     amountOfHumansAnnounced = int.MaxValue;
-                    this.Server.ServerSettings.CanVoteDay = Random.Shared.Next(0, 3) != 3;
+                    this.Server.ServerSettings.CanVoteDay = Random.Shared.Next(0, 3) == 0;
                     this.Server.ServerSettings.CanVoteNight = true;
+                    foreach (Squad<RunnerPlayer> squad in this.Server.AllSquads.Where(s => s.Team == HUMANS))
+                    {
+                        squad.SquadPoints = squadPoint;
+                    }
                     break;
                 case GameState.EndingGame:
-                    this.Server.RoundSettings.SecondsLeft = 30;
                     this.State.BuildPhase = false;
                     this.State.EndOfBuildPhase = DateTime.MinValue;
+
                     break;
                 default:
                     break;
+            }
+
+            return Task.CompletedTask;
+        }
+        private int squadPoint = 400;
+        public override Task OnSquadLeaderChanged(Squad<RunnerPlayer> squad, RunnerPlayer newLeader)
+        {
+            if (squad.Team == HUMANS)
+            {
+                if (squad.Members.Count() == 1 && squad.SquadPoints == 0)
+                {
+                    squad.SquadPoints = squadPoint;
+
+                }
+            }
+            return Task.CompletedTask;
+        }
+
+        public override Task OnSquadPointsChanged(Squad<RunnerPlayer> squad, int newPoints)
+        {
+            if (squad.Team == ZOMBIES)
+            {
+                squad.SquadPoints = 0;
             }
 
             return Task.CompletedTask;
@@ -241,33 +305,54 @@ namespace Zombies
                 {
                     player.Modifications.CanDeploy = true;
                 }
+                else
+                {
+                    player.Modifications.CanDeploy = false;
+                    player.Modifications.Freeze = true;
+                }
             }
 
             // Announce build phase
-            this.Server.AnnounceShort($"Human build phase has started! Zombies will arrive in {this.Configuration.BuildPhaseDuration} seconds!");
+            this.Server.AnnounceLong($"Human build phase has started! Zombies will arrive in {this.Configuration.BuildPhaseDuration} seconds!");
 
-            while (this.State.BuildPhase)
+            while (this.IsLoaded && this.Server.IsConnected && this.State.BuildPhase)
             {
-                if (this.State.EndOfBuildPhase <= DateTime.Now)
+                try
                 {
-                    this.Server.AnnounceShort("Build phase has ended! Zombies are now released!");
-                    this.State.BuildPhase = false;
-                    this.State.EndOfBuildPhase = DateTime.MinValue;
-                    this.State.Save();
-
-                    foreach (RunnerPlayer player in this.Server.AllPlayers)
+                    if (this.State.EndOfBuildPhase <= DateTime.Now)
                     {
-                        player.Modifications.CanDeploy = true;
+                        this.Server.AnnounceShort("Build phase has ended! Zombies are now released!");
+                        this.State.BuildPhase = false;
+                        this.State.EndOfBuildPhase = DateTime.MinValue;
+                        this.State.Save();
+
+                        foreach (RunnerPlayer player in this.Server.AllPlayers)
+                        {
+                            player.Modifications.CanDeploy = true;
+                            player.Modifications.Freeze = false;
+                        }
+
+                        break;
                     }
 
-                    break;
-                }
+                    int secondsLeft = (int)(this.State.EndOfBuildPhase - DateTime.Now).TotalSeconds;
 
-                if (this.State.EndOfBuildPhase.AddSeconds(-10) <= DateTime.Now)
+                    Console.WriteLine($"{secondsLeft} ({secondsLeft % 10})");
+
+                    if ((secondsLeft % 10) == 0)
+                    {
+                        this.Server.SayToAllChat($"Zombies will arrive in {secondsLeft} seconds!");
+                    }
+
+                    if (this.State.EndOfBuildPhase.AddSeconds(-10) <= DateTime.Now)
+                    {
+                        this.Server.AnnounceShort($"Zombies will arrive in {this.State.EndOfBuildPhase.Subtract(DateTime.Now).TotalSeconds:0} seconds!");
+                    }
+                }
+                catch (Exception ex)
                 {
-                    this.Server.AnnounceShort($"Zombies will arrive in {this.State.EndOfBuildPhase.Subtract(DateTime.Now).TotalSeconds:0} seconds!");
+                    Console.WriteLine(ex.ToString());
                 }
-
                 await Task.Delay(1000);
             }
         }
@@ -279,6 +364,10 @@ namespace Zombies
 
             if (player.Team == (this.getPlayer(player).IsZombie ? ZOMBIES : HUMANS))
             {
+                //if (player.Squad == null)
+                //{
+                //    player.JoinSquad(Squads.Alpha);
+                //}
                 return;
             }
 
@@ -289,10 +378,32 @@ namespace Zombies
             {
                 player.Message("You have been infected and are now a zombie!", 10);
             }
+
+            //player.JoinSquad(Squads.Alpha);
         }
+
+        //public override Task OnPlayerJoinedSquad(RunnerPlayer player, Squad<RunnerPlayer> squad)
+        //{
+        //    if (squad.Name != Squads.Alpha)
+        //    {
+        //        player.DisbandTheSquad();
+        //        player.JoinSquad(Squads.Alpha);
+        //    }
+
+        //    return Task.CompletedTask;
+        //}
+
+        //public override Task OnPlayerLeftSquad(RunnerPlayer player, Squad<RunnerPlayer> squad)
+        //{
+        //    player.JoinSquad(Squads.Alpha);
+
+        //    return Task.CompletedTask;
+        //}
 
         public override Task OnPlayerConnected(RunnerPlayer player)
         {
+            player.Modifications.ReviveHP = 0;
+            player.Modifications.CanDeploy = true;
             player.Modifications.AllowedVehicles = VehicleType.None;
             player.Modifications.SpawningRule = HUMANS_SPAWN_RULE;
             player.Modifications.CaptureFlagSpeedMultiplier = 0.5f;
@@ -303,14 +414,27 @@ namespace Zombies
 
             if (this.Server.RoundSettings.State == GameState.Playing)
             {
-                this.getPlayer(player).IsZombie = true;
+                this.getPlayer(player).IsZombie = !this.State.BuildPhase;
             }
             else
             {
                 this.getPlayer(player).IsZombie = this.Server.AllPlayers.Count(p => this.getPlayer(p).IsZombie) < this.Configuration.InitialZombieCount && player.Team == ZOMBIES;
             }
+
             this.forcePlayerToCorrectTeam(player);
-            this.Server.SayToAllChat($"Welcome {player.Name} to the server!");
+
+            if (this.State.BuildPhase)
+            {
+                player.Modifications.CanDeploy = !this.getPlayer(player).IsZombie;
+                player.Modifications.Freeze = this.getPlayer(player).IsZombie;
+            }
+            else
+            {
+                player.Modifications.CanDeploy = true;
+                player.Modifications.Freeze = false;
+            }
+
+            //this.Server.SayToAllChat($"/*Welcome*/ {player.Name} to the server!");
 
             return Task.CompletedTask;
         }
@@ -352,6 +476,8 @@ namespace Zombies
 
         public override Task<OnPlayerSpawnArguments?> OnPlayerSpawning(RunnerPlayer player, OnPlayerSpawnArguments request)
         {
+            this.getPlayer(player).IsJuggernaut = false;
+
             if (player.Team != (this.getPlayer(player).IsZombie ? ZOMBIES : HUMANS))
             {
                 this.forcePlayerToCorrectTeam(player);
@@ -379,6 +505,8 @@ namespace Zombies
                     player.Message("Suicide C4 is not allowed and was replaced by C4.", 10);
                 }
 
+                //request.Loadout.FirstAid = null;
+
                 // Humans can spawn as whatever they like
 
                 // Human skins
@@ -394,8 +522,10 @@ namespace Zombies
                     request.Loadout.SecondaryWeapon.SideRail = HUMAN_FLASHLIGHTS[Random.Shared.Next(0, HUMAN_FLASHLIGHTS.Length)];
                 }
 
-                if (this.Server.AllPlayers.Count() < 16 && this.Server.AllPlayers.Count(p => !this.getPlayer(p).IsZombie) >= this.Server.AllPlayers.Count(p => this.getPlayer(p).IsZombie))
+                if (this.Server.AllPlayers.Count() < this.Configuration.PistolThreshold && this.Server.AllPlayers.Count(p => !this.getPlayer(p).IsZombie) >= this.Server.AllPlayers.Count(p => this.getPlayer(p).IsZombie))
                 {
+                    this.getPlayer(player).InitialLoadout = request.Loadout;
+
                     request.Loadout.Throwable = null;
                     request.Loadout.ThrowableExtra = 0;
                     request.Loadout.HeavyGadget = null;
@@ -421,6 +551,36 @@ namespace Zombies
             request.Loadout.FirstAid = default;
             request.Loadout.FirstAidExtra = 0;
 
+            bool isClassZombie = false;
+
+            if (Random.Shared.Next(0, 100) <= 5)
+            {
+                player.Message("You are a flashbang zombie, use it wisely!", 10);
+                request.Loadout.ThrowableExtra = 4;
+                request.Loadout.Throwable = Gadgets.Flashbang;
+                isClassZombie = true;
+            }
+
+            if (Random.Shared.Next(0, 100) <= 10 && !isClassZombie)
+            {
+                player.Message("You are a riot shield zombie, use it wisely!", 10);
+                request.Loadout.HeavyGadget = Gadgets.RiotShield;
+                isClassZombie = true;
+            }
+
+            if (Random.Shared.Next(0, 100) <= 5 && !isClassZombie)
+            {
+                player.Message("You are a suicide C4 zombie, use it wisely!", 10);
+                request.Loadout.HeavyGadget = Gadgets.SuicideC4;
+                isClassZombie = true;
+            }
+
+            if ((Random.Shared.Next(0, 100) == 1 && !isClassZombie))
+            {
+                player.Message("<color=\"red\">YOU ARE JUGGERNAUT ZOMBIE, GO FUCK SHIT UP", 30);
+                this.getPlayer(player).IsJuggernaut = true;
+            }
+
             request.Wearings.Eye = ZOMBIE_EYES[Random.Shared.Next(0, ZOMBIE_EYES.Length)];
             request.Wearings.Face = ZOMBIE_FACE[Random.Shared.Next(0, ZOMBIE_FACE.Length)];
             request.Wearings.Hair = ZOMBIE_HAIR[Random.Shared.Next(0, ZOMBIE_HAIR.Length)];
@@ -442,11 +602,17 @@ namespace Zombies
                 player.Modifications.FallDamageMultiplier = this.Configuration.FallDamageMultiplier;
                 player.Modifications.RunningSpeedMultiplier = this.Configuration.RunningSpeedMultiplier;
                 player.Modifications.JumpHeightMultiplier = this.Configuration.JumpHeightMultiplier;
-
+                player.Modifications.FriendlyHUDEnabled = true;
                 player.Modifications.CanUseNightVision = true;
 
                 var ratio = (float)this.Server.AllPlayers.Count(p => this.getPlayer(p).IsZombie) / ((float)this.Server.AllPlayers.Count() - 1);
                 var multiplier = this.Configuration.ZombieMinDamageReceived + (this.Configuration.ZombieMaxDamageReceived - this.Configuration.ZombieMinDamageReceived) * ratio;
+
+                if (this.getPlayer(player).IsJuggernaut)
+                {
+                    multiplier = 0.01f;
+                }
+
                 player.Modifications.ReceiveDamageMultiplier = multiplier;
                 await Console.Out.WriteLineAsync($"Damage received multiplier of {player.Name} is set to {multiplier} ({ratio} zombie/total ratio)");
 
@@ -455,7 +621,8 @@ namespace Zombies
 
             // Humans are normal
             player.Modifications.FallDamageMultiplier = 1f;
-            player.Modifications.RunningSpeedMultiplier = 1f;
+            player.Modifications.RunningSpeedMultiplier = 0.9f;
+            player.Modifications.FriendlyHUDEnabled = false;
             player.Modifications.JumpHeightMultiplier = 1f;
             player.Modifications.ReceiveDamageMultiplier = 1f;
 
@@ -479,48 +646,48 @@ namespace Zombies
                 return;
             }
 
-            if (playerKill.Killer.SteamID == playerKill.Victim.SteamID)
-            {
-                // Suicides have a chance to turn humans into zombies
-                if (Random.Shared.NextDouble() > this.Configuration.SuicideZombieficationChance)
-                {
-                    return;
-                }
-                else
-                {
-#pragma warning disable CS4014
-                    Task.Run(async () =>
-#pragma warning restore CS4014
-                    {
-                        RunnerPlayer player = playerKill.Victim;
-                        this.getPlayer(player).Turn = true;
-                        int waitTime = Random.Shared.Next(this.Configuration.SuicideZombieficationMaxTime);
-                        await Task.Delay(waitTime / 2);
-                        if (player.Team == HUMANS)
-                        {
-                            this.Server.SayToAllChat($"<b>{player.Name}<b> has been bitten by a <color=\"red\">zombie<color=\"white\">. Be careful around them!");
-                            player.Message("You have been bitten by a zombie! Any time now you will turn into one.", 10);
-                        }
-                        else
-                        {
-                            return;
-                        }
+            //            if (playerKill.Killer.SteamID == playerKill.Victim.SteamID)
+            //            {
+            //                // Suicides have a chance to turn humans into zombies
+            //                if (Random.Shared.NextDouble() > this.Configuration.SuicideZombieficationChance)
+            //                {
+            //                    return;
+            //                }
+            //                else
+            //                {
+            //#pragma warning disable CS4014
+            //                    Task.Run(async () =>
+            //#pragma warning restore CS4014
+            //                    {
+            //                        RunnerPlayer player = playerKill.Victim;
+            //                        this.getPlayer(player).Turn = true;
+            //                        int waitTime = Random.Shared.Next(this.Configuration.SuicideZombieficationMaxTime);
+            //                        await Task.Delay(waitTime / 2);
+            //                        if (player.Team == HUMANS)
+            //                        {
+            //                            this.Server.SayToAllChat($"<b>{player.Name}<b> has been bitten by a <color=\"red\">zombie<color=\"white\">. Be careful around them!");
+            //                            player.Message("You have been bitten by a zombie! Any time now you will turn into one.", 10);
+            //                        }
+            //                        else
+            //                        {
+            //                            return;
+            //                        }
 
-                        await Task.Delay(waitTime / 2);
+            //                        await Task.Delay(waitTime / 2);
 
-                        if (player.Team == HUMANS)
-                        {
-                            this.getPlayer(player).IsZombie = true;
-                            player.ChangeTeam(ZOMBIES);
-                            player.Modifications.SpawningRule = ZOMBIES_SPAWN_RULE;
-                            player.Message("You have been infected and are now a zombie!", 10);
-                            this.Server.SayToAllChat($"<b>{player.Name}<b> is now a <color=\"red\">zombie<color=\"white\">!");
-                            this.DiscordWebhooks?.SendMessage($"Player {playerKill.Victim.Name} succumbed to the bite and has become a zombie.");
-                            await this.checkGameEnd();
-                        }
-                    });
-                }
-            }
+            //                        if (player.Team == HUMANS)
+            //                        {
+            //                            this.getPlayer(player).IsZombie = true;
+            //                            player.ChangeTeam(ZOMBIES);
+            //                            player.Modifications.SpawningRule = ZOMBIES_SPAWN_RULE;
+            //                            player.Message("You have been infected and are now a zombie!", 10);
+            //                            //this.Server.SayToAllChat($"<b>{player.Name}<b> is now a <color=\"red\">zombie<color=\"white\">!");
+            //                            this.DiscordWebhooks?.SendMessage($"Player {playerKill.Victim.Name} succumbed to the bite and has become a zombie.");
+            //                            await this.checkGameEnd();
+            //                        }
+            //                    });
+            //                }
+            //            }
 
             // Zombie killed human, turn human into zombie
             this.getPlayer(playerKill.Victim).Turn = true;
@@ -538,7 +705,7 @@ namespace Zombies
 
         public override async Task OnPlayerDied(RunnerPlayer player)
         {
-            if (!this.getPlayer(player).Turn)
+            if (this.getPlayer(player).IsZombie)
             {
                 return;
             }
@@ -547,8 +714,8 @@ namespace Zombies
             this.getPlayer(player).Turn = false;
             this.getPlayer(player).IsZombie = true;
             this.forcePlayerToCorrectTeam(player);
-            this.Server.SayToAllChat($"<b>{player.Name}<b> is now a <color=\"red\">zombie<color=\"white\">!");
-            this.DiscordWebhooks?.SendMessage($"Player {player.Name} died and has become a zombie.");
+            //this.Server.SayToAllChat($"<b>{player.Name}<b> is now a <color=\"red\">zombie<color=\"white\">!");
+            //this.DiscordWebhooks?.SendMessage($"Player {player.Name} died and has become a zombie.");
 
             await checkGameEnd();
         }
@@ -567,30 +734,52 @@ namespace Zombies
 
         private async Task checkGameEnd()
         {
+            Console.WriteLine($"There are {this.Server.AllPlayers.Count(p => this.getPlayer(p).IsZombie)} zombies and {this.Server.AllPlayers.Count(p => !this.getPlayer(p).IsZombie)} humans for a total of {this.Server.AllPlayers.Count()} players.");
+
             if ((this.Server.RoundSettings.State != GameState.Playing) || safetyEnding)
             {
                 return;
             }
 
-            if (this.Server.AllPlayers.Count() < 16 && this.Server.AllPlayers.Count(p => !this.getPlayer(p).IsZombie) < this.Server.AllPlayers.Count(p => this.getPlayer(p).IsZombie))
+            if (this.Server.RoundSettings.SecondsLeft <= 2)
+            {
+                Console.WriteLine("HUMANS WIN ANNOUNCEMENT");
+                this.Server.AnnounceLong("Humans win");
+                await Task.Delay(200);
+                this.Server.ForceEndGame(HUMANS);
+                this.safetyEnding = true;
+            }
+
+            if (this.Server.AllPlayers.Count() < this.Configuration.PistolThreshold && this.Server.AllPlayers.Count(p => !this.getPlayer(p).IsZombie) < this.Server.AllPlayers.Count(p => this.getPlayer(p).IsZombie))
             {
                 foreach (RunnerPlayer player in this.Server.AllPlayers.Where(p => !this.getPlayer(p).IsZombie && p.IsAlive && !p.IsDown && !this.getPlayer(p).ReceivedLoadout))
                 {
                     this.getPlayer(player).ReceivedLoadout = true;
 
-
-                    player.SetThrowable(Gadgets.ImpactGrenade.Name, 6, false);
-                    player.SetFirstAidGadget(Gadgets.Bandage.Name, 6, false);
-                    player.SetHeavyGadget(Gadgets.HeavyAmmoKit.Name, 2, false);
-                    player.SetLightGadget(Gadgets.C4.Name, 4, false);
-                    player.SetPrimaryWeapon(new WeaponItem()
+                    PlayerLoadout? targetLoadout = this.getPlayer(player).InitialLoadout;
+                    if (targetLoadout == null)
                     {
-                        Tool = Weapons.M4A1,
-                        MainSight = Attachments.RedDot,
-                        Barrel = Attachments.SuppressorLong,
-                        SideRail = this.Server.DayNight == MapDayNight.Night ? HUMAN_FLASHLIGHTS[Random.Shared.Next(0, HUMAN_FLASHLIGHTS.Length)] : Attachments.Redlaser,
-                        UnderRail = Attachments.VerticalGrip
-                    }, 20, false);
+                        player.SetThrowable(Gadgets.ImpactGrenade.Name, 6, false);
+                        //player.SetFirstAidGadget(Gadgets.Bandage.Name, 6, false);
+                        player.SetHeavyGadget(Gadgets.HeavyAmmoKit.Name, 2, false);
+                        player.SetLightGadget(Gadgets.C4.Name, 4, false);
+                        player.SetPrimaryWeapon(new WeaponItem()
+                        {
+                            Tool = Weapons.M4A1,
+                            MainSight = Attachments.RedDot,
+                            Barrel = Attachments.SuppressorLong,
+                            SideRail = this.Server.DayNight == MapDayNight.Night ? HUMAN_FLASHLIGHTS[Random.Shared.Next(0, HUMAN_FLASHLIGHTS.Length)] : Attachments.Redlaser,
+                            UnderRail = Attachments.VerticalGrip
+                        }, 20, false);
+                    }
+                    else
+                    {
+                        player.SetThrowable(targetLoadout.Value.ThrowableName, targetLoadout.Value.ThrowableExtra, false);
+                        player.SetFirstAidGadget(targetLoadout.Value.FirstAidName, targetLoadout.Value.FirstAidExtra, false);
+                        player.SetHeavyGadget(targetLoadout.Value.HeavyGadgetName, targetLoadout.Value.HeavyGadgetExtra, false);
+                        player.SetLightGadget(targetLoadout.Value.LightGadgetName, targetLoadout.Value.LightGadgetExtra, false);
+                        player.SetPrimaryWeapon(targetLoadout.Value.PrimaryWeapon, targetLoadout.Value.PrimaryExtraMagazines, false);
+                    }
                 }
             }
 
@@ -680,7 +869,7 @@ namespace Zombies
             this.Configuration.Save();
         }
 
-        [CommandCallback("switch", Description = "Switch a player to the other team.", AllowedRoles = Roles.Admin)]
+        [CommandCallback("switch", Description = "Switch a player to the other team.", AllowedRoles = Roles.Moderator)]
         public async void SwitchCommand(RunnerPlayer source, RunnerPlayer target)
         {
             target.Kill();
@@ -692,6 +881,24 @@ namespace Zombies
             }
 
             await checkGameEnd();
+        }
+
+        [CommandCallback("afk", Description = "Make zombies win because humans camp or are AFK", AllowedRoles = Roles.Moderator)]
+        public async void LastHumanAFKOrCamping(RunnerPlayer caller)
+        {
+            if (this.Server.AllPlayers.Count(p => !this.getPlayer(p).IsZombie) > 10)
+            {
+                caller.Message("There are too many humans to end the game.");
+                return;
+            }
+
+            safetyEnding = true;
+            this.Server.AnnounceLong("ZOMBIES WIN!");
+            this.DiscordWebhooks?.SendMessage($"== ZOMBIES WIN ==");
+            await Task.Delay(1000);
+            this.Server.ForceEndGame(ZOMBIES);
+
+            return;
         }
     }
 
@@ -719,9 +926,12 @@ namespace Zombies
             this.Player = player;
         }
 
+        public PlayerLoadout? InitialLoadout { get; set; } = null;
+
         public bool IsZombie { get; set; }
         public bool Turn { get; set; }
         public bool ReceivedLoadout { get; set; } = false;
+        public bool IsJuggernaut { get; internal set; }
     }
 
     public class ZombiesConfiguration : ModuleConfiguration
@@ -737,6 +947,7 @@ namespace Zombies
         public float RunningSpeedMultiplier { get; set; } = 1f;
         public float JumpHeightMultiplier { get; set; } = 1f;
         public int BuildPhaseDuration { get; set; } = 0;
+        public int PistolThreshold { get; set; } = 255;
     }
 
     public class ZombiesState : ModuleConfiguration
