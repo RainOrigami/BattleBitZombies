@@ -756,6 +756,7 @@ namespace Zombies
         {
             if (player.Team == ZOMBIES)
             {
+                this.getPlayer(player).ZombieClass = null;
                 return;
             }
 
