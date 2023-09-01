@@ -68,6 +68,10 @@ public class Zombies : BattleBitModule
         {
             p.SetHeavyGadget(Gadgets.RiotShield.Name, 1);
         }),
+        new ZombieClass("Smoker", 2, p =>
+        {
+            p.SetLightGadget(Gadgets.M320SmokeGrenadeLauncher.Name, 6);
+        })
     };
 
     private static readonly string[] allowedZombieMeleeGadgets = new[]
