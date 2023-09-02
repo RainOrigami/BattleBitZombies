@@ -1,4 +1,5 @@
-﻿using BattleBitAPI.Common;
+﻿using BattleBitAPI;
+using BattleBitAPI.Common;
 using BattleBitAPI.Server;
 using BattleBitBaseModules;
 using BBRAPIModules;
@@ -7,12 +8,15 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Numerics;
 using System.Text;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 
 namespace Zombies;
 
 [RequireModule(typeof(CommandHandler))]
+[RequireModule(typeof(RichText))]
 public class Zombies : BattleBitModule
 {
     #region STATIC SETTINGS
@@ -40,35 +44,36 @@ public class Zombies : BattleBitModule
 
     private static readonly ZombieClass[] zombieClasses = new[]
     {
-        new ZombieClass("Tank", 1, p =>
+        new ZombieClass("Tank", 5, p =>
         {
-            p.Modifications.ReceiveDamageMultiplier = 0.01f;
+            p.Modifications.ReceiveDamageMultiplier = 0.05f;
+            p.Modifications.RunningSpeedMultiplier = 0.85f;
         }),
-        new ZombieClass("Boomer", 1, p =>
+        new ZombieClass("Boomer", 10, p =>
         {
             p.SetLightGadget(Gadgets.SuicideC4.Name, 1);
         }),
-        new ZombieClass("Flasher", 2, p =>
+        new ZombieClass("Flasher", 10, p =>
         {
-            p.SetThrowable(Gadgets.Flashbang.Name, 2);
+            p.SetThrowable(Gadgets.Flashbang.Name, 4);
         }),
-        new ZombieClass("Hunter", 2, p =>
+        new ZombieClass("Hunter", 10, p =>
         {
-            p.Modifications.RunningSpeedMultiplier = 3f;
+            p.Modifications.RunningSpeedMultiplier = 1.5f;
         }),
-        new ZombieClass("Jumper", 2, p =>
+        new ZombieClass("Jumper", 20, p =>
         {
-            p.Modifications.JumpHeightMultiplier = 3f;
+            p.Modifications.JumpHeightMultiplier = 2f;
         }),
-        new ZombieClass("Climber", 2, p =>
+        new ZombieClass("Climber", 20, p =>
         {
             p.SetLightGadget(Gadgets.GrapplingHook.Name, 1);
         }),
-        new ZombieClass("Shielded", 3, p =>
+        new ZombieClass("Shielded", 20, p =>
         {
             p.SetHeavyGadget(Gadgets.RiotShield.Name, 1);
         }),
-        new ZombieClass("Smoker", 2, p =>
+        new ZombieClass("Smoker", 5, p =>
         {
             p.SetLightGadget(Gadgets.M320SmokeGrenadeLauncher.Name, 6);
         })
@@ -108,6 +113,7 @@ public class Zombies : BattleBitModule
     #region CONFIGURATION
     public ZombiesConfiguration Configuration { get; set; }
     public ZombiesState State { get; set; }
+    public ZombieLoadoutStorage LoadoutStorage { get; set; }
     #endregion
 
     #region MODULES
@@ -128,7 +134,7 @@ public class Zombies : BattleBitModule
     {
         if (!this.players.ContainsKey(player.SteamID))
         {
-            this.players.Add(player.SteamID, new ZombiesPlayer(player));
+            this.players.Add(player.SteamID, new ZombiesPlayer(player, this.LoadoutStorage.Loadouts.ContainsKey(player.SteamID) ? this.LoadoutStorage.Loadouts[player.SteamID] : new ZombieLoadout()));
         }
 
         return this.players[player.SteamID];
@@ -144,6 +150,15 @@ public class Zombies : BattleBitModule
             stopwatch.Restart();
             await manageGameState();
             this.State.Save();
+            this.LoadoutStorage.Loadouts = this.players.ToDictionary(p => p.Key, p => p.Value.Loadout!);
+            try
+            {
+                this.LoadoutStorage.Save();
+            }
+            catch (Exception ex)
+            {
+                debugLog(ex.ToString());
+            }
             stopwatch.Stop();
             int timeToWait = this.Configuration.GameStateUpdateTimer - (int)stopwatch.ElapsedMilliseconds;
             if (timeToWait > 0)
@@ -194,12 +209,9 @@ public class Zombies : BattleBitModule
             return;
         }
 
-        // Build phase management
-        this.buildPhaseManagement();
-
         // Transition to playing, can transition from any state
 
-        if (this.Server.RoundSettings.State == GameState.Playing && this.State.GameState != ZombiesGameState.GamePhase && !this.State.BuildPhase)
+        if (this.Server.RoundSettings.State == GameState.Playing && this.State.GameState == ZombiesGameState.BuildPhase && !this.State.BuildPhase)
         {
             this.State.GameState = ZombiesGameState.GamePhase;
             await this.zombieGameStateChanged(oldState);
@@ -228,8 +240,17 @@ public class Zombies : BattleBitModule
         this.zombieGameStateTick();
     }
 
+    int tick = 0;
+
     private void zombieGameStateTick()
     {
+        tick++;
+        if (tick % 40 == 0)
+        {
+            tick = 0;
+            Console.WriteLine($"There are {this.Server.AllPlayers.Count()} players on the server ({this.Server.AllPlayers.Count(p => p.Team == ZOMBIES)} zombies, {this.Server.AllPlayers.Count(p => p.Team == HUMANS)} humans)");
+        }
+
         switch (this.State.GameState)
         {
             case ZombiesGameState.WaitingForPlayers:
@@ -340,7 +361,7 @@ public class Zombies : BattleBitModule
         this.State.BuildPhase = true;
         this.State.EndOfBuildPhase = DateTime.Now.AddSeconds(this.Configuration.BuildPhaseDuration);
 
-        this.Server.AnnounceLong($"Human build phase has started! Zombies will arrive in {(int)(this.State.EndOfBuildPhase - DateTime.Now).TotalSeconds} seconds!");
+        this.Server.AnnounceLong($"Human build phase has started! Infection in {this.Configuration.BuildPhaseDuration} seconds!");
 
         foreach (RunnerPlayer player in this.Server.AllPlayers)
         {
@@ -378,16 +399,20 @@ public class Zombies : BattleBitModule
 
         int secondsLeft = (int)(this.State.EndOfBuildPhase - DateTime.Now).TotalSeconds;
 
-        Console.WriteLine($"{secondsLeft} ({secondsLeft % 10})");
-
-        if ((secondsLeft % 10) == 0)
+        if ((secondsLeft % 10) == 0 && this.State.LastZombiesArrivalAnnounced != secondsLeft)
         {
-            this.Server.SayToAllChat($"Zombies will arrive in {secondsLeft} seconds!");
+            this.State.LastZombiesArrivalAnnounced = secondsLeft;
+            this.Server.SayToAllChat($"Infection in {secondsLeft} seconds!");
         }
 
         if (this.State.EndOfBuildPhase.AddSeconds(-10) < DateTime.Now)
         {
-            this.Server.AnnounceShort($"Zombies will arrive in {this.State.EndOfBuildPhase.Subtract(DateTime.Now).TotalSeconds:0} seconds!");
+            this.Server.AnnounceShort($"Infection in {this.State.EndOfBuildPhase.Subtract(DateTime.Now).TotalSeconds:0} seconds!");
+        }
+
+        foreach (RunnerPlayer player in this.Server.AllPlayers.Where(p => p.Team != HUMANS))
+        {
+            player.ChangeTeam(HUMANS);
         }
     }
     #endregion
@@ -419,6 +444,10 @@ public class Zombies : BattleBitModule
             _ = Task.Run(async () =>
             {
                 await Task.Delay(Random.Shared.Next(this.Configuration.ZombieMaxInfectionTime));
+                if (player.Position.X != 0 && player.Position.Y != 0 && player.Position.Z != 0)
+                {
+                    this.getPlayer(player).Loadout.SpawnPosition = player.Position;
+                }
                 await this.makePlayerZombie(player);
                 this.Server.UILogOnServer($"{player.Name} has been turned into a zombie!", 10);
             });
@@ -457,7 +486,7 @@ public class Zombies : BattleBitModule
 
     private bool isHumanWin()
     {
-        if (this.Server.RoundSettings.SecondsLeft <= 2)
+        if (this.Server.RoundSettings.SecondsLeft <= 2 || this.State.ZombieTickets <= 3)
         {
             return true;
         }
@@ -488,12 +517,37 @@ public class Zombies : BattleBitModule
 
         this.humanLoadoutHandler();
         this.zombieLoadoutHandler();
+
+        this.ensureZombiesHaveNoGuns();
+
+        this.zombieTicketHandler();
     }
 
+    private void ensureZombiesHaveNoGuns()
+    {
+        foreach (RunnerPlayer player in this.Server.AllPlayers.Where(p => p.Team == ZOMBIES))
+        {
+            if (!string.IsNullOrEmpty(player.CurrentLoadout.PrimaryWeapon.ToolName) && player.CurrentLoadout.PrimaryWeapon.ToolName != "EmptyGun")
+            {
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine($"Player {player.Name} has a {player.CurrentLoadout.PrimaryWeapon.ToolName}!");
+                Console.ResetColor();
+                player.SetHeavyGadget(Gadgets.SledgeHammer.Name, 1, true);
+                player.SetLightGadget(Gadgets.Pickaxe.Name, 1, true);
+                player.Kill();
+                player.Message("Sorry loadout bug, you were killed to fix it.");
+            }
+        }
+    }
+
+    private void zombieTicketHandler()
+    {
+        this.Server.RoundSettings.TeamBTickets = this.State.ZombieTickets;
+    }
 
     private void buildPhaseGameStateTick()
     {
-        this.humanLoadoutHandler();
+        this.buildPhaseManagement();
         this.zombieLoadoutHandler();
     }
 
@@ -515,14 +569,21 @@ public class Zombies : BattleBitModule
 
     public override async Task OnConnected()
     {
+        await this.applyServerSettings();
+
         _ = Task.Run(gameStateManagerWorker);
 
-        foreach (RunnerPlayer player in this.Server.AllPlayers)
+        await Task.CompletedTask;
+    }
+
+    public override Task<bool> OnPlayerRequestingToChangeRole(RunnerPlayer player, GameRole requestedRole)
+    {
+        if (requestedRole == GameRole.Support || requestedRole == GameRole.Engineer)
         {
-            await OnPlayerConnected(player);
+            return Task.FromResult(false);
         }
 
-        await Task.CompletedTask;
+        return Task.FromResult(true);
     }
 
     public override async Task OnPlayerConnected(RunnerPlayer player)
@@ -538,6 +599,12 @@ public class Zombies : BattleBitModule
             if (player.Team != HUMANS)
             {
                 player.ChangeTeam(HUMANS);
+            }
+
+            if (!player.InSquad)
+            {
+                Squad<RunnerPlayer> targetSquad = await this.findFirstNonEmptySquad(player.Team);
+                player.JoinSquad(targetSquad.Name);
             }
 
             await this.applyHumanRuleSetToPlayer(player);
@@ -593,25 +660,29 @@ public class Zombies : BattleBitModule
             request.Wearings.Backbag = HUMAN_BACKPACK[Random.Shared.Next(HUMAN_BACKPACK.Length)];
             request.Wearings.Chest = HUMAN_ARMOR[Random.Shared.Next(HUMAN_ARMOR.Length)];
 
+            this.getPlayer(player).InitialLoadout = request.Loadout;
+
             if (this.Server.DayNight == MapDayNight.Night)
             {
-                if (!HUMAN_FLASHLIGHTS.Contains(request.Loadout.PrimaryWeapon.SideRail.Name))
+                if (!HUMAN_FLASHLIGHTS.Contains(request.Loadout.PrimaryWeapon.SideRailName))
                 {
                     request.Loadout.PrimaryWeapon.SideRail = new Attachment(HUMAN_FLASHLIGHTS[Random.Shared.Next(HUMAN_FLASHLIGHTS.Length)], AttachmentType.SideRail);
                 }
 
-                if (!HUMAN_FLASHLIGHTS.Contains(request.Loadout.SecondaryWeapon.SideRail.Name))
+                if (!HUMAN_FLASHLIGHTS.Contains(request.Loadout.SecondaryWeapon.SideRailName))
                 {
                     request.Loadout.SecondaryWeapon.SideRail = new Attachment(HUMAN_FLASHLIGHTS[Random.Shared.Next(HUMAN_FLASHLIGHTS.Length)], AttachmentType.SideRail);
                 }
             }
 
+            request.Loadout.SecondaryExtraMagazines = 15;
+
             switch (this.State.GameState)
             {
-                case ZombiesGameState.GamePhase:
-                case ZombiesGameState.Countdown:
-                    await this.applyHumanRuleSetToPlayer(player);
-                    break;
+                //case ZombiesGameState.GamePhase:
+                //case ZombiesGameState.Countdown:
+                //    await this.applyHumanRuleSetToPlayer(player);
+                //    break;
                 case ZombiesGameState.BuildPhase:
                     await this.applyBuildPhaseRuleSetToPlayer(player);
                     break;
@@ -623,17 +694,28 @@ public class Zombies : BattleBitModule
             }
 
             if (this.State.GameState == ZombiesGameState.Countdown ||
-                this.State.GameState == ZombiesGameState.BuildPhase ||
-                this.State.GameState == ZombiesGameState.GamePhase)
+                this.State.GameState == ZombiesGameState.BuildPhase)
+            {
+
+                request.Loadout.Throwable = null;
+
+                request.Loadout.PrimaryWeapon.Tool = null;
+
+                request.Loadout.LightGadget = null;
+
+                request.Loadout.HeavyGadget = null;
+
+            }
+            else if (this.State.GameState == ZombiesGameState.GamePhase)
             {
                 // Only allow for humans to spawn with the loadout they are supposed to have
-                double humanRatio = this.actualHumanCount / this.Server.AllPlayers.Count();
+                double humanRatio = (double)this.actualHumanCount / this.Server.AllPlayers.Count();
 
                 ZombiesPlayer human = this.getPlayer(player);
 
                 if (humanRatio <= this.Configuration.HumanRatioThrowable)
                 {
-                    human.ReceivedThrowable = true;
+                    human.Loadout.ReceivedThrowable = true;
                 }
                 else
                 {
@@ -642,7 +724,7 @@ public class Zombies : BattleBitModule
 
                 if (humanRatio <= this.Configuration.HumanRatioPrimary)
                 {
-                    human.ReceivedPrimary = true;
+                    human.Loadout.ReceivedPrimary = true;
                 }
                 else
                 {
@@ -651,7 +733,7 @@ public class Zombies : BattleBitModule
 
                 if (humanRatio <= this.Configuration.HumanRatioLightGadget)
                 {
-                    human.ReceivedLightGadget = true;
+                    human.Loadout.ReceivedLightGadget = true;
                 }
                 else
                 {
@@ -660,7 +742,7 @@ public class Zombies : BattleBitModule
 
                 if (humanRatio <= this.Configuration.HumanRatioHeavyGadget)
                 {
-                    human.ReceivedHeavyGadget = true;
+                    human.Loadout.ReceivedHeavyGadget = true;
                 }
                 else
                 {
@@ -686,52 +768,61 @@ public class Zombies : BattleBitModule
         request.Wearings.Backbag = ZOMBIE_BACKPACK[Random.Shared.Next(ZOMBIE_BACKPACK.Length)];
         request.Wearings.Belt = ZOMBIE_BELT[Random.Shared.Next(ZOMBIE_BELT.Length)];
 
-        if (request.Loadout.PrimaryWeapon.Tool is not null)
-        {
-            request.Loadout.PrimaryWeapon.Tool = null;
-            request.Loadout.PrimaryExtraMagazines = 0;
-        }
-
-        if (request.Loadout.SecondaryWeapon.Tool is not null)
-        {
-            request.Loadout.SecondaryWeapon.Tool = null;
-            request.Loadout.SecondaryExtraMagazines = 0;
-        }
-
-        if (!allowedZombieMeleeGadgets.Contains(request.Loadout.HeavyGadgetName))
-        {
-            request.Loadout.HeavyGadget = Gadgets.SledgeHammer;
-            request.Loadout.HeavyGadgetExtra = 0;
-        }
-
-        if (!allowedZombieMeleeGadgets.Contains(request.Loadout.LightGadgetName))
-        {
-            request.Loadout.LightGadget = Gadgets.Pickaxe;
-            request.Loadout.LightGadgetExtra = 0;
-        }
-
-        if (!allowedZombieThrowables.Contains(request.Loadout.ThrowableName))
-        {
-            request.Loadout.Throwable = Gadgets.SmokeGrenadeRed;
-            request.Loadout.ThrowableExtra = 10;
-        }
-
-        request.Loadout.FirstAid = Gadgets.Bandage;
+        request.Loadout.FirstAid = default;
         request.Loadout.FirstAidExtra = 0;
+        request.Loadout.PrimaryWeapon = default;
+        request.Loadout.SecondaryWeapon = default;
+        request.Loadout.Throwable = Gadgets.SmokeGrenadeRed; // Red smoke makes the zombies menacing
+        request.Loadout.ThrowableExtra = 5;
+        request.Loadout.LightGadget = Gadgets.SledgeHammer;
+        request.Loadout.HeavyGadget = Gadgets.Pickaxe;
 
-        switch (this.State.GameState)
-        {
-            case ZombiesGameState.Countdown:
-            case ZombiesGameState.BuildPhase:
-            case ZombiesGameState.GamePhase:
-                await this.applyZombieRuleSetToPlayer(player);
-                break;
-            default:
-                Console.ForegroundColor = ConsoleColor.Yellow;
-                Console.WriteLine($"Zombie spawned during game state {this.State.GameState} which is ignored.");
-                Console.ResetColor();
-                break;
-        }
+        //if (request.Loadout.PrimaryWeapon.Tool is not null || request.Loadout.PrimaryWeapon.ToolName != "EmptyGun")
+        //{
+        //    request.Loadout.PrimaryWeapon.Tool = null;
+        //    request.Loadout.PrimaryExtraMagazines = 0;
+        //}
+
+        //if (request.Loadout.SecondaryWeapon.Tool is not null || request.Loadout.SecondaryWeapon.ToolName != "EmptyGun")
+        //{
+        //    request.Loadout.SecondaryWeapon.Tool = null;
+        //    request.Loadout.SecondaryExtraMagazines = 0;
+        //}
+
+        //if (!allowedZombieMeleeGadgets.Contains(request.Loadout.HeavyGadgetName))
+        //{
+        //    request.Loadout.HeavyGadget = Gadgets.SledgeHammer;
+        //    //request.Loadout.HeavyGadgetExtra = 1;
+        //}
+
+        //if (!allowedZombieMeleeGadgets.Contains(request.Loadout.LightGadgetName))
+        //{
+        //    request.Loadout.LightGadget = Gadgets.Pickaxe;
+        //    //request.Loadout.LightGadgetExtra = 1;
+        //}
+
+        //if (!allowedZombieThrowables.Contains(request.Loadout.ThrowableName))
+        //{
+        //    request.Loadout.Throwable = Gadgets.SmokeGrenadeRed;
+        //    request.Loadout.ThrowableExtra = 10;
+        //}
+
+        //request.Loadout.FirstAid = Gadgets.Bandage;
+        //request.Loadout.FirstAidExtra = 0;
+
+        //switch (this.State.GameState)
+        //{
+        //    case ZombiesGameState.Countdown:
+        //    case ZombiesGameState.BuildPhase:
+        //    case ZombiesGameState.GamePhase:
+        //        await this.applyZombieRuleSetToPlayer(player);
+        //        break;
+        //    default:
+        //        Console.ForegroundColor = ConsoleColor.Yellow;
+        //        Console.WriteLine($"Zombie spawned during game state {this.State.GameState} which is ignored.");
+        //        Console.ResetColor();
+        //        break;
+        //}
 
         return request;
     }
@@ -746,6 +837,18 @@ public class Zombies : BattleBitModule
         }
 
         await this.applyZombieRuleSetToPlayer(player);
+        this.State.ZombieTickets--;
+        if (this.State.ZombieTickets < 200 && this.State.ZombieTickets % 50 == 0)
+        {
+            this.Server.SayToAllChat($"{this.RichText?.Size(125)}{this.RichText?.FromColorName("yellow")}Zombies have {this.State.ZombieTickets} tickets left!");
+        }
+
+        Vector3? spawnPosition = this.getPlayer(player).Loadout.SpawnPosition;
+        if (spawnPosition is not null)
+        {
+            this.getPlayer(player).Loadout.SpawnPosition = null;
+            player.Teleport(spawnPosition.Value);
+        }
     }
 
     public override Task OnPlayerDisconnected(RunnerPlayer player)
@@ -758,11 +861,21 @@ public class Zombies : BattleBitModule
         return Task.CompletedTask;
     }
 
+    public override Task OnAPlayerDownedAnotherPlayer(OnPlayerKillArguments<RunnerPlayer> args)
+    {
+        if (args.Victim.Team == HUMANS)
+        {
+            this.getPlayer(args.Victim).Loadout.SpawnPosition = args.Victim.Position;
+        }
+
+        return Task.CompletedTask;
+    }
+
     public override async Task OnPlayerDied(RunnerPlayer player)
     {
         if (player.Team == ZOMBIES)
         {
-            this.getPlayer(player).ZombieClass = null;
+            this.getPlayer(player).Loadout.ZombieClass = null;
             return;
         }
 
@@ -819,11 +932,13 @@ public class Zombies : BattleBitModule
         int initialZombieCount = this.Configuration.InitialZombieCount;
 
         // If initial zombie count is greater than initial zombie maximum percentage, set it to the maximum percentage
-        int maxAmountOfZombies = (int)(players.Count * (this.Configuration.InitialZombieMaxPercentage / 100.0));
+        int maxAmountOfZombies = (int)Math.Ceiling(players.Count * (this.Configuration.InitialZombieMaxPercentage / 100.0));
         if (initialZombieCount > maxAmountOfZombies)
         {
             initialZombieCount = maxAmountOfZombies;
         }
+
+        Console.WriteLine($"{maxAmountOfZombies} / {initialZombieCount} / {this.Configuration.InitialZombieMaxPercentage}");
 
         for (int i = 0; i < initialZombieCount; i++)
         {
@@ -835,6 +950,11 @@ public class Zombies : BattleBitModule
         }
 
         return Task.FromResult(zombies.ToArray());
+    }
+
+    private void debugLog(string message)
+    {
+        Console.WriteLine($"[{DateTime.Now.ToShortTimeString()}] {message}");
     }
 
     private int getLastHumanSquadPoints(Squads humanSquad)
@@ -878,8 +998,11 @@ public class Zombies : BattleBitModule
             return;
         }
 
+        PlayerLoadout oldLoadout = player.CurrentLoadout;
+        PlayerWearings oldWearings = player.CurrentWearings;
+        Vector3 oldPosition = player.Position;
         player.ChangeTeam(ZOMBIES);
-        await this.applyZombieRuleSetToPlayer(player);
+        player.SpawnPlayer(oldLoadout, oldWearings, oldPosition, new Vector3(0, 0, 0), PlayerStand.Proning, 0f);
         player.Message($"You have been turned into a {RichText?.FromColorName("red")}ZOMBIE{RichText?.FromColorName("white")}.", 10);
 
         await Task.CompletedTask;
@@ -896,8 +1019,8 @@ public class Zombies : BattleBitModule
         // - All players are frozen
 
         player.ChangeTeam(HUMANS);
-        player.Modifications.CanDeploy = false;
-        player.Modifications.Freeze = true;
+        player.Modifications.CanDeploy = true;
+        player.Modifications.Freeze = false;
 
         await Task.CompletedTask;
     }
@@ -931,7 +1054,7 @@ public class Zombies : BattleBitModule
             player.Modifications.CanDeploy = true;
             player.Modifications.Freeze = false;
 
-            if (player.Squad.Name == Squads.NoSquad)
+            if (!player.InSquad)
             {
                 Squad<RunnerPlayer> targetSquad = await this.findFirstNonEmptySquad(player.Team);
                 player.JoinSquad(targetSquad.Name);
@@ -941,8 +1064,8 @@ public class Zombies : BattleBitModule
         {
             await this.applyZombieRuleSetToPlayer(player);
 
-            player.Modifications.CanDeploy = false;
-            player.Modifications.Freeze = true;
+            player.Modifications.CanDeploy = true;
+            player.Modifications.Freeze = false;
         }
     }
     #endregion
@@ -950,6 +1073,7 @@ public class Zombies : BattleBitModule
     #region PLAYER RULE SETS
     private async Task applyHumanRuleSetToPlayer(RunnerPlayer player)
     {
+        Console.WriteLine($"Human rule for {player.Name}");
         // Ruleset for humans:
         // - Humans are all default
         // - Humans can not suicide
@@ -968,21 +1092,25 @@ public class Zombies : BattleBitModule
         player.Modifications.FriendlyHUDEnabled = false;
         player.Modifications.GiveDamageMultiplier = 1f;
         player.Modifications.HitMarkersEnabled = false;
-        player.Modifications.HpPerBandage = 0f;
+        player.Modifications.HpPerBandage = this.Configuration.HpPerBandage;
         player.Modifications.JumpHeightMultiplier = 1f;
-        Console.ForegroundColor = ConsoleColor.Green;
-        Console.WriteLine($"Initial MinimumDamageToStartBleeding is {player.Modifications.MinimumDamageToStartBleeding}");
-        Console.ResetColor();
-        player.Modifications.MinimumDamageToStartBleeding = 30f; // TODO: get initial value
-        Console.ForegroundColor = ConsoleColor.Green;
-        Console.WriteLine($"Initial MinimumHpToStartBleeding is {player.Modifications.MinimumHpToStartBleeding}");
-        Console.ResetColor();
-        player.Modifications.MinimumHpToStartBleeding = 30f; // TODO: get initial value
+        player.Modifications.MinimumDamageToStartBleeding = 10f; // TODO: get initial value
+        player.Modifications.MinimumHpToStartBleeding = 40f; // TODO: get initial value
         player.Modifications.ReceiveDamageMultiplier = 1f;
         player.Modifications.ReloadSpeedMultiplier = 1f;
-        player.Modifications.ReviveHP = 0;
+        if (player.Role == GameRole.Medic)
+        {
+            player.Modifications.ReviveHP = 30;
+        }
+        else
+        {
+            player.Modifications.ReviveHP = 0;
+        }
+        player.Modifications.RespawnTime = 0;
         player.Modifications.RunningSpeedMultiplier = 1f;
+        player.Modifications.DownTimeGiveUpTime = 13;
         player.Modifications.SpawningRule = HUMANS_SPAWN_RULE;
+        player.Modifications.CanSuicide = false;
 
         player.Modifications.CanDeploy = true;
         player.Modifications.Freeze = false;
@@ -992,6 +1120,7 @@ public class Zombies : BattleBitModule
 
     private async Task applyZombieRuleSetToPlayer(RunnerPlayer player)
     {
+        Console.WriteLine($"Zombie rule for {player.Name}");
         // Ruleset for zombies:
         // - Zombies can not have a primary weapon
         // - Zombies can not have a secondary weapon
@@ -1012,19 +1141,22 @@ public class Zombies : BattleBitModule
         // - Zombies may have classes that change these rules
         // - Zombies can only spawn on points and squad mates
 
-        if (player.CurrentLoadout.PrimaryWeapon.ToolName is not null)
-        {
-            player.SetPrimaryWeapon(emptyWeapon, 0);
-        }
+        //debugLog($"Zombie primary weapon tool name: {player.CurrentLoadout.PrimaryWeapon.ToolName}");
+        //debugLog($"Zombie secondary weapon tool name: {player.CurrentLoadout.SecondaryWeapon.ToolName}");
+        //debugLog($"Zombie light gadget name: {player.CurrentLoadout.LightGadgetName}");
+        //debugLog($"Zombie heavy gadget name: {player.CurrentLoadout.HeavyGadgetName}");
+        //debugLog($"Zombie ThrowableName name: {player.CurrentLoadout.ThrowableName}");
 
-        if (player.CurrentLoadout.SecondaryWeapon.ToolName is not null)
+        if (player.CurrentLoadout.PrimaryWeapon.ToolName is not null && player.CurrentLoadout.PrimaryWeapon.ToolName != "EmptyGun")
         {
-            player.SetSecondaryWeapon(emptyWeapon, 0);
+            await Console.Out.WriteLineAsync($"Zombie {player.Name} has gun {player.CurrentLoadout.PrimaryWeapon.ToolName}, resetting loadout");
+            player.SetFirstAidGadget("none", 0);
+            player.SetHeavyGadget(Gadgets.SledgeHammer.Name, 0, true);
         }
 
         if (!allowedZombieMeleeGadgets.Contains(player.CurrentLoadout.HeavyGadgetName))
         {
-            player.SetHeavyGadget(Gadgets.SledgeHammer.Name, 0);
+            player.SetHeavyGadget(Gadgets.SledgeHammer.Name, 0, true);
         }
 
         if (!allowedZombieMeleeGadgets.Contains(player.CurrentLoadout.LightGadgetName))
@@ -1034,10 +1166,8 @@ public class Zombies : BattleBitModule
 
         if (!allowedZombieThrowables.Contains(player.CurrentLoadout.ThrowableName))
         {
-            player.SetThrowable(Gadgets.SmokeGrenadeBlue.Name, 10);
+            player.SetThrowable(Gadgets.SmokeGrenadeRed.Name, 5);
         }
-
-        player.SetFirstAidGadget(Gadgets.Bandage.Name, 0);
 
         player.Modifications.AirStrafe = true;
         player.Modifications.AllowedVehicles = VehicleType.None;
@@ -1053,8 +1183,17 @@ public class Zombies : BattleBitModule
         player.Modifications.ReceiveDamageMultiplier = this.Configuration.ZombieDamageReceived;
         player.Modifications.ReloadSpeedMultiplier = 1f;
         player.Modifications.ReviveHP = 0;
+        player.Modifications.RespawnTime = 0;
         player.Modifications.RunningSpeedMultiplier = this.Configuration.ZombieRunningSpeedMultiplier;
+        player.Modifications.DownTimeGiveUpTime = 5;
         player.Modifications.SpawningRule = ZOMBIES_SPAWN_RULE;
+        player.Modifications.CanSuicide = true;
+
+        float ratio = (float)this.Server.AllPlayers.Count(p => p.Team == ZOMBIES) / ((float)this.Server.AllPlayers.Count() - 1);
+        float multiplier = (float)this.Configuration.ZombieMinDamageReceived + ((float)this.Configuration.ZombieMaxDamageReceived - (float)this.Configuration.ZombieMinDamageReceived) * (float)(ratio - 0.1f);
+        //Console.WriteLine($"{this.Configuration.ZombieMinDamageReceived} + ({this.Configuration.ZombieMaxDamageReceived} - {this.Configuration.ZombieMinDamageReceived}) * ({ratio} - 0.1) = {multiplier}");
+        player.Modifications.ReceiveDamageMultiplier = multiplier;
+        await Console.Out.WriteLineAsync($"Damage received multiplier of {player.Name} is set to {multiplier} ({ratio} zombie/total ratio)");
 
         if (this.State.GameState == ZombiesGameState.GamePhase)
         {
@@ -1063,9 +1202,31 @@ public class Zombies : BattleBitModule
         }
         else
         {
-            player.Modifications.CanDeploy = false;
-            player.Modifications.Freeze = true;
+            player.Modifications.CanDeploy = true;
+            player.Modifications.Freeze = false;
         }
+
+        //debugLog($"Applied zombie rules to {player.Name}:");
+        //debugLog($"AirStrafe: {player.Modifications.AirStrafe}");
+        //debugLog($"AllowedVehicles: {player.Modifications.AllowedVehicles}");
+        //debugLog($"CanUseNightVision: {player.Modifications.CanUseNightVision}");
+        //debugLog($"FallDamageMultiplier: {player.Modifications.FallDamageMultiplier}");
+        //debugLog($"FriendlyHUDEnabled: {player.Modifications.FriendlyHUDEnabled}");
+        //debugLog($"GiveDamageMultiplier: {player.Modifications.GiveDamageMultiplier}");
+        //debugLog($"HitMarkersEnabled: {player.Modifications.HitMarkersEnabled}");
+        //debugLog($"HpPerBandage: {player.Modifications.HpPerBandage}");
+        //debugLog($"JumpHeightMultiplier: {player.Modifications.JumpHeightMultiplier}");
+        //debugLog($"MinimumDamageToStartBleeding: {player.Modifications.MinimumDamageToStartBleeding}");
+        //debugLog($"MinimumHpToStartBleeding: {player.Modifications.MinimumHpToStartBleeding}");
+        //debugLog($"ReceiveDamageMultiplier: {player.Modifications.ReceiveDamageMultiplier}");
+        //debugLog($"ReloadSpeedMultiplier: {player.Modifications.ReloadSpeedMultiplier}");
+        //debugLog($"ReviveHP: {player.Modifications.ReviveHP}");
+        //debugLog($"RunningSpeedMultiplier: {player.Modifications.RunningSpeedMultiplier}");
+        //debugLog($"SpawningRule: {player.Modifications.SpawningRule}");
+        //debugLog($"CanSuicide: {player.Modifications.CanSuicide}");
+        //debugLog($"CanDeploy: {player.Modifications.CanDeploy}");
+        //debugLog($"Freeze: {player.Modifications.Freeze}");
+
 
         await Task.CompletedTask;
     }
@@ -1080,29 +1241,47 @@ public class Zombies : BattleBitModule
         // - If there are more zombies than the ratio, the rest will be normal zombies
         // - Classes are limited by amount of zombies with that class
 
-        ZombiesPlayer[] classedZombies = this.Server.AllPlayers.Where(p => p.Team == ZOMBIES && !p.IsDown && p.IsAlive).Select(p => this.getPlayer(p)).Where(p => p.ZombieClass is not null).ToArray();
-        ZombieClass[] availableClasses = zombieClasses.Where(c => classedZombies.Count(z => z.ZombieClass == c) < c.RequestedAmount).ToArray();
+        ZombiesPlayer[] classedZombies = this.Server.AllPlayers.Where(p => p.Team == ZOMBIES && !p.IsDown && p.IsAlive).Select(p => this.getPlayer(p)).Where(p => p.Loadout.ZombieClass is not null).ToArray();
 
-        if (availableClasses.Length == 0)
+        List<ZombieClass> availableClasses = new();
+        foreach (ZombieClass @class in zombieClasses)
+        {
+            float percentOfClassed = classedZombies.Count(z => z.Loadout.ZombieClass == @class.Name) / ((float)classedZombies.Length == 0 ? 1f : (float)classedZombies.Length);
+            //Console.WriteLine($"Class has {percentOfClassed} of the total zombies and needs {@class.RequestedPercentage}");
+            if (percentOfClassed < (float)@class.RequestedPercentage / 100f)
+            {
+                availableClasses.Add(@class);
+            }
+        }
+
+        //ZombieClass[] availableClasses = zombieClasses.Where(c => classedZombies.Count(z => z.Loadout.ZombieClass == c.Name) < c.RequestedPercentage).ToArray();
+
+        //Console.WriteLine($"The following classes are available:{Environment.NewLine}{string.Join(Environment.NewLine, availableClasses.Select(c => $"{c.Name} ({c.RequestedAmount - classedZombies.Count(cls => cls.Loadout.ZombieClass == c.Name)})"))}");
+
+        if (availableClasses.Count() == 0)
         {
             return;
         }
 
         double classedZombiesRatio = (double)classedZombies.Length / this.Server.AllPlayers.Count(player => player.Team == ZOMBIES);
+
+        //Console.WriteLine($"The ratio is {classedZombiesRatio} >= {this.Configuration.ZombieClassRatio}");
+
         if (classedZombiesRatio >= this.Configuration.ZombieClassRatio)
         {
             return;
         }
 
-        ZombiesPlayer[] classCandidates = this.Server.AllPlayers.Where(p => p.Team == ZOMBIES && !p.IsDown && p.IsAlive).Select(p => this.getPlayer(p)).Where(p => p.ZombieClass is null).ToArray();
+        ZombiesPlayer[] classCandidates = this.Server.AllPlayers.Where(p => p.Team == ZOMBIES && !p.IsDown && p.IsAlive).Select(p => this.getPlayer(p)).Where(p => p.Loadout.ZombieClass is null).ToArray();
         if (classCandidates.Length == 0)
         {
             return;
         }
 
         ZombiesPlayer candidate = classCandidates[Random.Shared.Next(classCandidates.Length)];
-        ZombieClass zombieClass = availableClasses[Random.Shared.Next(availableClasses.Length)];
+        ZombieClass zombieClass = availableClasses[Random.Shared.Next(availableClasses.Count)];
 
+        candidate.Loadout.ZombieClass = zombieClass.Name;
         zombieClass.ApplyToPlayer(candidate.Player);
         candidate.Player.Message($"{this.RichText?.Size(120)}{this.RichText?.FromColorName("yellow")}YOU HAVE MUTATED!{this.RichText?.NewLine() ?? " "}{this.RichText?.Size(100)}{this.RichText?.Color()}You are a {this.RichText?.FromColorName("red")}{zombieClass.Name} {this.RichText?.Color()}zombie now! Go fuck shit up!", 15);
     }
@@ -1112,7 +1291,7 @@ public class Zombies : BattleBitModule
         foreach (RunnerPlayer player in this.Server.AllPlayers.Where(p => p.Team == HUMANS))
         {
             ZombiesPlayer human = this.getPlayer(player);
-            if (!human.ReceivedPrimary || !human.ReceivedHeavyGadget || !human.ReceivedLightGadget || !human.ReceivedThrowable)
+            if (!human.Loadout.ReceivedPrimary || !human.Loadout.ReceivedHeavyGadget || !human.Loadout.ReceivedLightGadget || !human.Loadout.ReceivedThrowable)
             {
                 this.applyHumanLoadoutToPlayer(player);
             }
@@ -1121,7 +1300,10 @@ public class Zombies : BattleBitModule
 
     private void applyHumanLoadoutToPlayer(RunnerPlayer player)
     {
-        double humanRatio = this.actualHumanCount / this.Server.AllPlayers.Count();
+        double humanRatio = (double)this.actualHumanCount / this.Server.AllPlayers.Count();
+
+        //Console.WriteLine($"Human ratio is {humanRatio}");
+
         ZombiesPlayer human = this.getPlayer(player);
         if (human.InitialLoadout == null)
         {
@@ -1147,32 +1329,50 @@ public class Zombies : BattleBitModule
             };
         }
 
-        if (humanRatio <= this.Configuration.HumanRatioThrowable && !human.ReceivedThrowable)
+        if (humanRatio <= this.Configuration.HumanRatioThrowable && !human.Loadout.ReceivedThrowable)
         {
             player.SayToChat($"{this.RichText?.FromColorName("green")}You received your throwable!");
             player.SetThrowable(human.InitialLoadout.Value.ThrowableName, human.InitialLoadout.Value.ThrowableExtra);
-            human.ReceivedThrowable = true;
+            human.Loadout.ReceivedThrowable = true;
         }
 
-        if (humanRatio <= this.Configuration.HumanRatioLightGadget && !human.ReceivedLightGadget)
+        if (humanRatio <= this.Configuration.HumanRatioLightGadget && !human.Loadout.ReceivedLightGadget)
         {
             player.SayToChat($"{this.RichText?.FromColorName("green")}You received your light gadget!");
-            player.SetLightGadget(human.InitialLoadout.Value.LightGadgetName, human.InitialLoadout.Value.LightGadgetExtra);
-            human.ReceivedLightGadget = true;
+
+            if (human.InitialLoadout.Value.LightGadgetName == Gadgets.SmallAmmoKit)
+            {
+                player.SetLightGadget(Gadgets.HeavyAmmoKit.Name, human.InitialLoadout.Value.LightGadgetExtra);
+            }
+            else
+            {
+                player.SetLightGadget(human.InitialLoadout.Value.LightGadgetName, human.InitialLoadout.Value.LightGadgetExtra);
+            }
+
+            human.Loadout.ReceivedLightGadget = true;
         }
 
-        if (humanRatio <= this.Configuration.HumanRatioHeavyGadget && !human.ReceivedHeavyGadget)
+        if (humanRatio <= this.Configuration.HumanRatioHeavyGadget && !human.Loadout.ReceivedHeavyGadget)
         {
             player.SayToChat($"{this.RichText?.FromColorName("green")}You received your heavy gadget!");
-            player.SetHeavyGadget(human.InitialLoadout.Value.HeavyGadgetName, human.InitialLoadout.Value.HeavyGadgetExtra);
-            human.ReceivedHeavyGadget = true;
+
+            if (human.InitialLoadout.Value.HeavyGadgetName == Gadgets.SmallAmmoKit)
+            {
+                player.SetHeavyGadget(Gadgets.HeavyAmmoKit.Name, human.InitialLoadout.Value.HeavyGadgetExtra);
+            }
+            else
+            {
+                player.SetHeavyGadget(human.InitialLoadout.Value.HeavyGadgetName, human.InitialLoadout.Value.HeavyGadgetExtra);
+            }
+
+            human.Loadout.ReceivedHeavyGadget = true;
         }
 
-        if (humanRatio <= this.Configuration.HumanRatioPrimary && !human.ReceivedPrimary)
+        if (humanRatio <= this.Configuration.HumanRatioPrimary && !human.Loadout.ReceivedPrimary)
         {
             player.SayToChat($"{this.RichText?.FromColorName("green")}You received your primary weapon!");
             player.SetPrimaryWeapon(human.InitialLoadout.Value.PrimaryWeapon, human.InitialLoadout.Value.PrimaryExtraMagazines);
-            human.ReceivedPrimary = true;
+            human.Loadout.ReceivedPrimary = true;
         }
     }
     #endregion
@@ -1208,14 +1408,30 @@ public class Zombies : BattleBitModule
                 {
                     this.Server.SayToAllChat($"{humanCount} HUMANS LEFT, {this.RichText?.FromColorName("red")}KILL THEM!");
                 }
+
+                this.State.LastHumansAnnounced = humanCount;
             }
         }
-
-        this.Configuration.AnnounceLastHumansCount = humanCount;
     }
 
     private void exposeHumansOnMap()
     {
+        if (this.Server.AllPlayers.Count(p => p.Team == HUMANS) <= this.Configuration.AnnounceLastHumansCount)
+        {
+            foreach (RunnerPlayer player in this.Server.AllPlayers)
+            {
+                if (player.Team == ZOMBIES)
+                {
+                    player.Modifications.IsExposedOnMap = false;
+                    continue;
+                }
+
+                player.Modifications.IsExposedOnMap = true;
+            }
+
+            return;
+        }
+
         if (DateTime.Now >= this.State.NextHumanExposeSwitch)
         {
             if (this.State.ExposeOnMap)
@@ -1246,8 +1462,9 @@ public class Zombies : BattleBitModule
     private async Task applyServerSettings()
     {
         this.Server.SetServerSizeForNextMatch(MapSize._64vs64);
-        this.Server.GamemodeRotation.SetRotation("FRONTLINE");
+        this.Server.GamemodeRotation.SetRotation("DOMI");
         this.Server.ServerSettings.UnlockAllAttachments = true;
+        this.Server.ServerSettings.PlayerCollision = true;
 
         await Task.CompletedTask;
     }
@@ -1332,31 +1549,44 @@ public class ZombiesPlayer
 {
     public RunnerPlayer Player { get; set; }
 
-    public ZombiesPlayer(RunnerPlayer player)
+    public ZombiesPlayer(RunnerPlayer player, ZombieLoadout loadout)
     {
         this.Player = player;
+        this.Loadout = loadout;
     }
 
     public PlayerLoadout? InitialLoadout { get; set; } = null;
 
+    public ZombieLoadout Loadout { get; set; }
+}
+
+public class ZombieLoadout
+{
     public bool ReceivedThrowable { get; set; } = false;
     public bool ReceivedLightGadget { get; set; } = false;
     public bool ReceivedHeavyGadget { get; set; } = false;
     public bool ReceivedPrimary { get; set; } = false;
-    public ZombieClass? ZombieClass { get; set; } = null;
+    public string? ZombieClass { get; set; } = null;
+    public Vector3? SpawnPosition { get; set; } = null;
+}
+
+public class ZombieLoadoutStorage : ModuleConfiguration
+{
+    public Dictionary<ulong, ZombieLoadout> Loadouts { get; set; } = new();
 }
 
 public class ZombieClass
 {
     public string Name { get; }
-    public int RequestedAmount { get; }
+    public float RequestedPercentage { get; }
 
+    [JsonIgnore]
     public Action<RunnerPlayer> ApplyToPlayer { get; }
 
-    public ZombieClass(string name, int requestedAmount, Action<RunnerPlayer> applyToPlayer)
+    public ZombieClass(string name, float requestedPercentage, Action<RunnerPlayer> applyToPlayer)
     {
         this.Name = name;
-        this.RequestedAmount = requestedAmount;
+        this.RequestedPercentage = requestedPercentage;
         this.ApplyToPlayer = applyToPlayer;
     }
 }
@@ -1380,10 +1610,13 @@ public class ZombiesConfiguration : ModuleConfiguration
     public double HumanExposeOffTime { get; set; } = 6;
     public double HumanExposeOnTime { get; set; } = 2;
     public double HumanRatioThrowable { get; set; } = 0.65;
-    public double HumanRatioLightGadget { get; set; } = 0.5;
-    public double HumanRatioHeavyGadget { get; set; } = 0.35;
-    public double HumanRatioPrimary { get; set; } = 0.2;
-    public double ZombieClassRatio { get; set; } = 0.1;
+    public double HumanRatioLightGadget { get; set; } = 0.6;
+    public double HumanRatioHeavyGadget { get; set; } = 0.55;
+    public double HumanRatioPrimary { get; set; } = 0.5;
+    public double ZombieClassRatio { get; set; } = 0.35;
+    public float HpPerBandage { get; set; } = 40f;
+    public float ZombieMinDamageReceived { get; set; }
+    public float ZombieMaxDamageReceived { get; set; }
 }
 
 public class ZombiesState : ModuleConfiguration
@@ -1395,6 +1628,8 @@ public class ZombiesState : ModuleConfiguration
     public DateTime EndOfBuildPhase { get; set; } = DateTime.MinValue;
     public DateTime NextHumanExposeSwitch { get; set; } = DateTime.MinValue;
     public bool ExposeOnMap { get; set; } = false;
+    public int LastZombiesArrivalAnnounced { get; set; } = 0;
+    public double ZombieTickets { get; set; } = 420;
 
     public void Reset()
     {
@@ -1405,6 +1640,8 @@ public class ZombiesState : ModuleConfiguration
         this.EndOfBuildPhase = DateTime.MinValue;
         this.NextHumanExposeSwitch = DateTime.MinValue;
         this.ExposeOnMap = false;
+        this.LastZombiesArrivalAnnounced = 0;
+        this.ZombieTickets = 420;
 
         this.Save();
     }
