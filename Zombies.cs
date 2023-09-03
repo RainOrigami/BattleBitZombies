@@ -540,7 +540,7 @@ public class Zombies : BattleBitModule
             this.currentExclusionZoneMap = exclusionZoneMapFileName;
             try
             {
-                this.exclusionZones = JsonSerializer.Deserialize<List<(float X, float Y)[]>>(File.ReadAllText($"./data/Zombies/exclusionZones/{exclusionZoneMapFileName}"))?.Select(v => v.Select(a => new Vector2(a.X, a.Y)).ToArray()).ToList() ?? new();
+                this.exclusionZones = JsonSerializer.Deserialize<List<SimplePoint[]>>(File.ReadAllText($"./data/Zombies/exclusionZones/{exclusionZoneMapFileName}"))?.Select(v => v.Select(a => new Vector2(a.X, a.Y)).ToArray()).ToList() ?? new();
             }
             catch (Exception ex)
             {
@@ -1749,6 +1749,12 @@ public class ZombiesState : ModuleConfiguration
 
         this.Save();
     }
+}
+
+class SimplePoint
+{
+    public float X { get; set; }
+    public float Y { get; set; }
 }
 
 public enum ZombiesGameState
