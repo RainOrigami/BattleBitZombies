@@ -205,7 +205,7 @@ public class Zombies : BattleBitModule
 
         // Transition to build phase, can only transition from countdown
 
-        if (this.Server.RoundSettings.State == GameState.Playing && this.State.GameState == ZombiesGameState.Countdown || this.State.GameState == ZombiesGameState.WaitingForPlayers)
+        if (this.Server.RoundSettings.State == GameState.Playing && this.State.GameState == ZombiesGameState.Countdown)
         {
             this.State.GameState = ZombiesGameState.BuildPhase;
             await this.zombieGameStateChanged(oldState);
@@ -1633,7 +1633,6 @@ public class Zombies : BattleBitModule
     [CommandCallback("map", Description = "Current map name")]
     public void MapCommand(RunnerPlayer caller)
     {
-        this.Server.RoundSettings.SecondsLeft = 1;
         caller.Message($"Current map: {this.Server.Map}");
     }
 
