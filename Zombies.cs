@@ -7,6 +7,7 @@ using Commands;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Numerics;
 using System.Text;
@@ -23,8 +24,10 @@ public class Zombies : BattleBitModule
     internal const Team HUMANS = Team.TeamA;
     internal const Team ZOMBIES = Team.TeamB;
 
-    private const SpawningRule ZOMBIES_SPAWN_RULE = SpawningRule.Flags | SpawningRule.SquadCaptain | SpawningRule.SquadMates;
+    private const SpawningRule ZOMBIES_SPAWN_RULE = SpawningRule.Flags | SpawningRule.SquadCaptain | SpawningRule.SquadMates | SpawningRule.Boats;
     private const SpawningRule HUMANS_SPAWN_RULE = SpawningRule.Flags | SpawningRule.RallyPoints | SpawningRule.SquadCaptain | SpawningRule.SquadMates;
+    private const VehicleType ZOMBIES_VEHICLE_RULE = VehicleType.SeaVehicle;
+    private const VehicleType HUMANS_VEHICLE_RULE = VehicleType.None;
 
     private static readonly string[] HUMAN_UNIFORM = new[] { "ANY_NU_Uniform_Survivor_00", "ANY_NU_Uniform_Survivor_01", "ANY_NU_Uniform_Survivor_02", "ANY_NU_Uniform_Survivor_03", "ANY_NU_Uniform_Survivor_04" };
     private static readonly string[] HUMAN_HELMET = new[] { "ANV2_Survivor_All_Helmet_00_A_Z", "ANV2_Survivor_All_Helmet_00_B_Z", "ANV2_Survivor_All_Helmet_01_A_Z", "ANV2_Survivor_All_Helmet_02_A_Z", "ANV2_Survivor_All_Helmet_03_A_Z", "ANV2_Survivor_All_Helmet_04_A_Z", "ANV2_Survivor_All_Helmet_05_A_Z", "ANV2_Survivor_All_Helmet_05_B_Z" };
@@ -829,6 +832,7 @@ public class Zombies : BattleBitModule
 
     public override async Task OnPlayerSpawned(RunnerPlayer player)
     {
+
         if (player.Team == HUMANS)
         {
             await this.applyHumanRuleSetToPlayer(player);
@@ -1461,7 +1465,8 @@ public class Zombies : BattleBitModule
 
     private async Task applyServerSettings()
     {
-        this.Server.SetServerSizeForNextMatch(MapSize._64vs64);
+        this.Server.SetServerSizeForNextMatch(MapSize._127vs127);
+        this.Server.MapRotation.SetRotation(new[] { "Azagor", "Construction", "District", "Dustydew", "Eduardovo", "Isle", "Lonovo", "Multuislands", "Namak", "Salhan", "Sandysunset", "Tensatown", "Valley", "Wakistan", "Wineparadise", "Old_District", "Old_Namak" });
         this.Server.GamemodeRotation.SetRotation("DOMI");
         this.Server.ServerSettings.UnlockAllAttachments = true;
         this.Server.ServerSettings.PlayerCollision = true;
@@ -1540,6 +1545,21 @@ public class Zombies : BattleBitModule
 
         caller.Message("Build phase reset.", 10);
         this.Server.SayToAllChat($"{this.RichText?.Size(125)}{this.RichText?.FromColorName("yellow")}Build phase aborted.");
+    }
+
+    [CommandCallback("map", Description = "Current map name")]
+    public void MapCommand(RunnerPlayer caller)
+    {
+        this.Server.RoundSettings.SecondsLeft = 1;
+        caller.Message($"Current map: {this.Server.Map}");
+    }
+
+    [CommandCallback("pos", Description = "Current position", AllowedRoles = Roles.Admin)]
+    public void PosCommand(RunnerPlayer caller)
+    {
+        caller.Message($"Current position: {caller.Position}", 5);
+
+        File.AppendAllLines("positions.txt", new[] { $"{this.Server.Map},{this.Server.MapSize},{caller.Position.X}|{caller.Position.Y}|{caller.Position.Z}" });
     }
     #endregion
 }
@@ -1629,7 +1649,7 @@ public class ZombiesState : ModuleConfiguration
     public DateTime NextHumanExposeSwitch { get; set; } = DateTime.MinValue;
     public bool ExposeOnMap { get; set; } = false;
     public int LastZombiesArrivalAnnounced { get; set; } = 0;
-    public double ZombieTickets { get; set; } = 420;
+    public double ZombieTickets { get; set; } = 620;
 
     public void Reset()
     {
@@ -1641,7 +1661,7 @@ public class ZombiesState : ModuleConfiguration
         this.NextHumanExposeSwitch = DateTime.MinValue;
         this.ExposeOnMap = false;
         this.LastZombiesArrivalAnnounced = 0;
-        this.ZombieTickets = 420;
+        this.ZombieTickets = 620;
 
         this.Save();
     }
