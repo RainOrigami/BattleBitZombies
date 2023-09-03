@@ -1,5 +1,4 @@
-﻿using BattleBitAPI;
-using BattleBitAPI.Common;
+﻿using BattleBitAPI.Common;
 using BattleBitAPI.Server;
 using BattleBitBaseModules;
 using BBRAPIModules;
@@ -7,7 +6,6 @@ using Commands;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Drawing;
 using System.IO;
 using System.Linq;
 using System.Numerics;
@@ -530,7 +528,7 @@ public class Zombies : BattleBitModule
         this.exclusionZoneHandler();
     }
 
-    private List<PointF[]> exclusionZones = new List<PointF[]>();
+    private List<Vector2[]> exclusionZones = new List<Vector2[]>();
     private string? currentExclusionZoneMap = null;
 
     private void exclusionZoneHandler()
@@ -542,7 +540,7 @@ public class Zombies : BattleBitModule
             this.currentExclusionZoneMap = exclusionZoneMapFileName;
             try
             {
-                this.exclusionZones = JsonSerializer.Deserialize<List<PointF[]>>(File.ReadAllText($"./data/Zombies/exclusionZones/{exclusionZoneMapFileName}")) ?? new();
+                this.exclusionZones = JsonSerializer.Deserialize<List<(float X, float Y)[]>>(File.ReadAllText($"./data/Zombies/exclusionZones/{exclusionZoneMapFileName}"))?.Select(v => v.Select(a => new Vector2(a.X, a.Y)).ToArray()).ToList() ?? new();
             }
             catch (Exception ex)
             {
@@ -553,31 +551,33 @@ public class Zombies : BattleBitModule
         }
 
         Stopwatch exclusionZoneMeasurement = Stopwatch.StartNew();
-        foreach (PointF[] exclusionZone in this.exclusionZones)
+        foreach (Vector2[] exclusionZone in this.exclusionZones)
         {
             foreach (RunnerPlayer player in this.Server.AllPlayers.Where(p => p.Team == HUMANS && p.IsAlive))
             {
                 if (player.Position.X != 0 && player.Position.Y != 0 && player.Position.Z != 0)
                 {
-                    if (IsPointInPolygon(exclusionZone, new()
+                    if (!IsPointInPolygon(exclusionZone, new()
                     {
                         X = player.Position.X,
                         Y = player.Position.Z
                     }))
                     {
-                        ZombiesPlayer zombiesPlayer = this.getPlayer(player);
+                        continue;
+                    }
 
-                        zombiesPlayer.Persistence.ExclusionZoneWarningThreshold++;
+                    ZombiesPlayer zombiesPlayer = this.getPlayer(player);
 
-                        if (zombiesPlayer.Persistence.ExclusionZoneWarningThreshold > this.Configuration.ExclusionZoneWarningThreshold)
-                        {
-                            player.Kill();
-                            player.Message("You have been in the exclusion zone for too long.");
-                        }
-                        else
-                        {
-                            player.Message($"{this.RichText?.FromColorName("red")}{this.RichText?.Size(125)}/!\\ATTENTION/!\\{this.RichText?.NewLine() ?? " "}{this.RichText?.Color()}{this.RichText?.Size(100)}You are currently inside or very close to a safe zone or water.{this.RichText?.NewLine() ?? " "}{this.RichText?.FromColorName("yellow")}MOVE AWAY FROM THE EXCLUSION ZONE OR YOU WILL BE KILLED.", 1);
-                        }
+                    zombiesPlayer.Persistence.ExclusionZoneWarningThreshold++;
+
+                    if (zombiesPlayer.Persistence.ExclusionZoneWarningThreshold > this.Configuration.ExclusionZoneWarningThreshold)
+                    {
+                        player.Kill();
+                        player.Message("You have been in the exclusion zone for too long.");
+                    }
+                    else
+                    {
+                        player.Message($"{this.RichText?.FromColorName("red")}{this.RichText?.Size(125)}/!\\ATTENTION/!\\{this.RichText?.NewLine() ?? " "}{this.RichText?.Color()}{this.RichText?.Size(100)}You are currently inside or very close to a safe zone or water.{this.RichText?.NewLine() ?? " "}{this.RichText?.FromColorName("yellow")}MOVE AWAY FROM THE EXCLUSION ZONE OR YOU WILL BE KILLED.", 1);
                     }
                 }
             }
@@ -590,7 +590,7 @@ public class Zombies : BattleBitModule
         }
     }
 
-    public static bool IsPointInPolygon(PointF[] polygon, PointF point)
+    public static bool IsPointInPolygon(Vector2[] polygon, Vector2 point)
     {
         if (polygon.Length < 3)
             return false;
