@@ -1487,7 +1487,7 @@ public class Zombies : BattleBitModule
     private async Task applyServerSettings()
     {
         this.Server.SetServerSizeForNextMatch(MapSize._127vs127);
-        this.Server.MapRotation.SetRotation(new[] { "Azagor", "Construction", "District", "Dustydew", "Eduardovo", "Isle", "Lonovo", "Multuislands", "Namak", "Salhan", "Sandysunset", "Tensatown", "Valley", "Wakistan", "Wineparadise", "Old_District", "Old_Namak" });
+        this.Server.MapRotation.SetRotation(new[] { "Azagor", "Construction", "District", "Dustydew", "Eduardovo", "Isle", "Lonovo", "Multuislands", "Namak", "Salhan", "Sandysunset", "Tensatown", "Valley", "Wakistan", "Wineparadise" });
         //this.Server.MapRotation.SetRotation(new[] { "Azagor", "District" });
         this.Server.GamemodeRotation.SetRotation("DOMI");
         this.Server.ServerSettings.UnlockAllAttachments = true;
