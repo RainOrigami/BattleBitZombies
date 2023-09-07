@@ -53,7 +53,11 @@ public class Zombies : BattleBitModule
             p.Modifications.ReceiveDamageMultiplier = 0.05f;
             p.Modifications.RunningSpeedMultiplier = 0.85f;
         }),
-        new ZombieClass("Boomer", 10, p =>
+        new ZombieClass("Boomer", 5, p =>
+        {
+            p.SetLightGadget(Gadgets.C4.Name, 1);
+        }),
+        new ZombieClass("Creeper", 5, p =>
         {
             p.SetLightGadget(Gadgets.SuicideC4.Name, 1);
         }),
