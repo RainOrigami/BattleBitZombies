@@ -562,11 +562,6 @@ public class Zombies : BattleBitModule
             {
                 if (player.Position.X != 0 && player.Position.Y != 0 && player.Position.Z != 0)
                 {
-                    if (player.SteamID == 76561198142010443)
-                    {
-                        Console.WriteLine($"Player position: {player.Position.X},{player.Position.Z} - {IsPointInPolygon(exclusionZone, new() { X = player.Position.X, Y = player.Position.Z })}");
-                    }
-
                     if (!IsPointInPolygon(exclusionZone, new()
                     {
                         X = player.Position.X,
