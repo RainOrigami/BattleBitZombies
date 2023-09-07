@@ -457,7 +457,6 @@ public class Zombies : BattleBitModule
                     this.getPlayer(player).Persistence.SpawnPosition = player.Position;
                 }
                 await this.makePlayerZombie(player);
-                this.Server.UILogOnServer($"{player.Name} has been turned into a zombie!", 10);
             });
         }
     }
@@ -932,6 +931,7 @@ public class Zombies : BattleBitModule
         }
 
         await this.makePlayerZombie(player);
+        this.Server.UILogOnServer($"{player.Name} has been turned into a zombie!", 10);
 
         await Task.CompletedTask;
     }
@@ -1313,6 +1313,7 @@ public class Zombies : BattleBitModule
         candidate.Persistence.ZombieClass = zombieClass.Name;
         zombieClass.ApplyToPlayer(candidate.Player);
         candidate.Player.Message($"{this.RichText?.Size(120)}{this.RichText?.FromColorName("yellow")}YOU HAVE MUTATED!{this.RichText?.NewLine() ?? " "}{this.RichText?.Size(100)}{this.RichText?.Color()}You are a {this.RichText?.FromColorName("red")}{zombieClass.Name} {this.RichText?.Color()}zombie now! Go fuck shit up!", 15);
+        this.Server.UILogOnServer($"{candidate.Player.Name} has mutated into a {zombieClass.Name} zombie.", 10);
     }
 
     private void humanLoadoutHandler()
