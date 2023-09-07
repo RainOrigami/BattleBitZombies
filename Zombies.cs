@@ -1508,7 +1508,7 @@ public class Zombies : BattleBitModule
         //this.Server.MapRotation.SetRotation(new[] { "Azagor", "District" });
         this.Server.GamemodeRotation.SetRotation("DOMI");
         this.Server.ServerSettings.UnlockAllAttachments = true;
-        this.Server.ServerSettings.PlayerCollision = false;
+        this.Server.ServerSettings.PlayerCollision = true;
 
         await Task.CompletedTask;
     }
