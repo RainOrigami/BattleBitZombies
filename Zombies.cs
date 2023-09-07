@@ -1379,7 +1379,7 @@ public class Zombies : BattleBitModule
         if (humanRatio <= this.Configuration.HumanRatioThrowable && !human.Persistence.ReceivedThrowable)
         {
             player.SayToChat($"{this.RichText?.FromColorName("green")}You received your throwable!");
-            player.SetThrowable(human.InitialLoadout.Value.ThrowableName, human.InitialLoadout.Value.ThrowableExtra);
+            player.SetThrowable(human.InitialLoadout.Value.ThrowableName, 3);
             human.Persistence.ReceivedThrowable = true;
         }
 
@@ -1393,7 +1393,7 @@ public class Zombies : BattleBitModule
             }
             else
             {
-                player.SetLightGadget(human.InitialLoadout.Value.LightGadgetName, human.InitialLoadout.Value.LightGadgetExtra);
+                player.SetLightGadget(human.InitialLoadout.Value.LightGadgetName, 2);
             }
 
             human.Persistence.ReceivedLightGadget = true;
@@ -1409,7 +1409,7 @@ public class Zombies : BattleBitModule
             }
             else
             {
-                player.SetHeavyGadget(human.InitialLoadout.Value.HeavyGadgetName, human.InitialLoadout.Value.HeavyGadgetExtra);
+                player.SetHeavyGadget(human.InitialLoadout.Value.HeavyGadgetName, 1);
             }
 
             human.Persistence.ReceivedHeavyGadget = true;
