@@ -1004,7 +1004,7 @@ public class Zombies : BattleBitModule
         List<RunnerPlayer> zombies = new();
 
         // Initial zombies selection
-        List<RunnerPlayer> players = this.Server.AllPlayers.Where(p => p.Team == HUMANS).ToList();
+        List<RunnerPlayer> players = this.Server.AllPlayers.Where(p => p.Team == HUMANS && p.IsAlive).ToList();
         int initialZombieCount = this.Configuration.InitialZombieCount;
 
         // If initial zombie count is greater than initial zombie maximum percentage, set it to the maximum percentage
