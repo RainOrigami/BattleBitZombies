@@ -955,7 +955,17 @@ public class Zombies : BattleBitModule
     {
         if (player.SteamID == 76561198142010443)
         {
-            this.Server.SayToAllChat($"{this.RichText?.Size(110)}{this.RichText?.FromColorName("yellow")}BiG|Rain{this.RichText?.FromColorName("BlueViolet")}[Server Dev]{this.RichText?.Sprite("Moderator")}{this.RichText?.Color()}: {msg}");
+            if (msg.StartsWith("!"))
+            {
+                return Task.FromResult(false);
+            }
+
+            if (channel != ChatChannel.AllChat)
+            {
+                return Task.FromResult(true);
+            }
+
+            this.Server.SayToAllChat($"{this.RichText?.Size(110)}{this.RichText?.FromColorName("yellow")}BiG|Rain{this.RichText?.FromColorName("BlueViolet")}[Server Dev]{this.RichText?.Color()}: {msg}");
             return Task.FromResult(false);
         }
 
