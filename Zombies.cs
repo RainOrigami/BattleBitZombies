@@ -71,7 +71,7 @@ public class Zombies : BattleBitModule
         }),
         new ZombieClass("Jumper", 20, p =>
         {
-            p.Modifications.JumpHeightMultiplier = 2f;
+            p.Modifications.JumpHeightMultiplier = 2.5f;
         }),
         new ZombieClass("Climber", 20, p =>
         {
