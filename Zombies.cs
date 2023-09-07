@@ -576,6 +576,12 @@ public class Zombies : BattleBitModule
                         continue;
                     }
 
+                    if (this.State.GameState == ZombiesGameState.BuildPhase)
+                    {
+                        player.Message($"{this.RichText?.FromColorName("red")}{this.RichText?.Size(125)}/!\\ATTENTION/!\\{this.RichText?.NewLine() ?? " "}{this.RichText?.Color()}{this.RichText?.Size(100)}You are currently inside or very close to a safe zone or water.{this.RichText?.NewLine() ?? " "}{this.RichText?.FromColorName("yellow")}YOU WILL BE KILLED IF YOU STAY HERE ONCE THE BUILD PHASE HAS ENDED.", 1);
+                        continue;
+                    }
+
                     ZombiesPlayer zombiesPlayer = this.getPlayer(player);
 
                     zombiesPlayer.Persistence.ExclusionZoneWarningThreshold++;
@@ -645,6 +651,7 @@ public class Zombies : BattleBitModule
     {
         this.buildPhaseManagement();
         this.zombieLoadoutHandler();
+        this.exclusionZoneHandler();
     }
 
     private void countdownGameStateTick()
