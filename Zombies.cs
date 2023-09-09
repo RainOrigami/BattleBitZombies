@@ -50,13 +50,13 @@ public class Zombies : BattleBitModule
     {
         new ZombieClass("Tank", 5, p =>
         {
-            p.Modifications.ReceiveDamageMultiplier = 0.05f;
-            p.Modifications.RunningSpeedMultiplier = 0.85f;
+            p.Modifications.ReceiveDamageMultiplier = 0.10f;
+            p.Modifications.RunningSpeedMultiplier = 0.65f;
         }),
-        new ZombieClass("Boomer", 5, p =>
-        {
-            p.SetLightGadget(Gadgets.C4.Name, 1);
-        }),
+        //new ZombieClass("Boomer", 5, p =>
+        //{
+        //    p.SetLightGadget(Gadgets.C4.Name, 1);
+        //}),
         new ZombieClass("Creeper", 5, p =>
         {
             p.SetLightGadget(Gadgets.SuicideC4.Name, 1);
@@ -67,11 +67,11 @@ public class Zombies : BattleBitModule
         }),
         new ZombieClass("Hunter", 10, p =>
         {
-            p.Modifications.RunningSpeedMultiplier = 1.5f;
+            p.Modifications.RunningSpeedMultiplier = 2.0f;
         }),
         new ZombieClass("Jumper", 20, p =>
         {
-            p.Modifications.JumpHeightMultiplier = 2.5f;
+            p.Modifications.JumpHeightMultiplier = 3f;
         }),
         new ZombieClass("Climber", 20, p =>
         {
@@ -346,7 +346,7 @@ public class Zombies : BattleBitModule
         //}
 
         this.Server.RoundSettings.SecondsLeft = this.Configuration.CountdownPhaseDuration;
-        this.Server.ServerSettings.CanVoteDay = Random.Shared.Next(3) == 0;
+        this.Server.ServerSettings.CanVoteDay = Random.Shared.Next(5) == 0;
         this.Server.ServerSettings.CanVoteNight = true;
 
         foreach (RunnerPlayer player in this.Server.AllPlayers)
@@ -934,7 +934,7 @@ public class Zombies : BattleBitModule
 
         await this.makePlayerZombie(player);
         this.Server.UILogOnServer($"{player.Name} has been turned into a zombie!", 10);
-
+        this.DiscordWebhooks?.SendMessage($"{player.Name} has been turned into a zombie! ({this.Server.AllPlayers.Count(p => p.Team == ZOMBIES)}/{this.Server.AllPlayers.Count(p => p.Team == HUMANS && p.IsAlive && !p.IsDown)} z/h ratio)");
         await Task.CompletedTask;
     }
 
@@ -1289,6 +1289,12 @@ public class Zombies : BattleBitModule
         {
             float percentOfClassed = classedZombies.Count(z => z.Persistence.ZombieClass == @class.Name) / ((float)classedZombies.Length == 0 ? 1f : (float)classedZombies.Length);
             //Console.WriteLine($"Class has {percentOfClassed} of the total zombies and needs {@class.RequestedPercentage}");
+
+            if (@class.RequestedPercentage <= 10 && this.Server.AllPlayers.Count(p => p.Team == ZOMBIES) < this.Server.AllPlayers.Count(p => p.Team == HUMANS && p.IsAlive && !p.IsDown))
+            {
+                continue;
+            }
+
             if (percentOfClassed < (float)@class.RequestedPercentage / 100f)
             {
                 availableClasses.Add(@class);
@@ -1326,6 +1332,7 @@ public class Zombies : BattleBitModule
         zombieClass.ApplyToPlayer(candidate.Player);
         candidate.Player.Message($"{this.RichText?.Size(120)}{this.RichText?.FromColorName("yellow")}YOU HAVE MUTATED!{this.RichText?.NewLine() ?? " "}{this.RichText?.Size(100)}{this.RichText?.Color()}You are a {this.RichText?.FromColorName("red")}{zombieClass.Name} {this.RichText?.Color()}zombie now! Go fuck shit up!", 15);
         this.Server.UILogOnServer($"{candidate.Player.Name} has mutated into a {zombieClass.Name} zombie.", 10);
+        this.DiscordWebhooks?.SendMessage($"Player {candidate.Player.Name} has mutated into a {zombieClass.Name} zombie.");
     }
 
     private void humanLoadoutHandler()
@@ -1503,6 +1510,7 @@ public class Zombies : BattleBitModule
 
     private async Task applyServerSettings()
     {
+        this.Server.RoundSettings.PlayersToStart = this.Configuration.RequiredPlayersToStart;
         this.Server.SetServerSizeForNextMatch(MapSize._127vs127);
         this.Server.MapRotation.SetRotation(new[] { "Azagor", "Construction", "District", "Dustydew", "Eduardovo", "Isle", "Lonovo", "Multuislands", "Namak", "Salhan", "Sandysunset", "Tensatown", "Valley", "Wakistan", "Wineparadise" });
         //this.Server.MapRotation.SetRotation(new[] { "Azagor", "District" });
@@ -1702,11 +1710,11 @@ public class ZombiesState : ModuleConfiguration
     public DateTime NextHumanExposeSwitch { get; set; } = DateTime.MinValue;
     public bool ExposeOnMap { get; set; } = false;
     public int LastZombiesArrivalAnnounced { get; set; } = 0;
-    public double ZombieTickets { get; set; } = 4000;
+    public double ZombieTickets { get; set; } = 600;
 
     public void Reset()
     {
-        this.GameState = ZombiesGameState.WaitingForPlayers;
+        this.GameState = ZombiesGameState.Ended;
         this.LastSquadPoints = new();
         this.LastHumansAnnounced = int.MaxValue;
         this.BuildPhase = false;
@@ -1714,7 +1722,7 @@ public class ZombiesState : ModuleConfiguration
         this.NextHumanExposeSwitch = DateTime.MinValue;
         this.ExposeOnMap = false;
         this.LastZombiesArrivalAnnounced = 0;
-        this.ZombieTickets = 4000;
+        this.ZombieTickets = 600;
 
         this.Save();
     }
